@@ -2,11 +2,13 @@
 #include <stdbool.h>
 
 typedef struct PomMapBucket PomMapBucket;
+typedef struct PomMapDataHeap PomMapDataHeap;
 
 typedef struct PomMapCtx{
     uint32_t numBuckets;
     uint32_t numNodes;
     PomMapBucket *buckets;
+    PomMapDataHeap *dataHeap;
     bool initialised;
 }PomMapCtx;
 
@@ -27,3 +29,6 @@ int pomMapClear( PomMapCtx *_ctx );
 
 // Suggest a resize to the map
 int pomMapResize( PomMapCtx *_ctx, uint32_t _size );
+
+// Try optimise the data stored to help with caching
+int pomMapOptimise( PomMapCtx *_ctx );

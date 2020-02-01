@@ -9,21 +9,6 @@
 #define DEFAULT_CONFIG_PATH "./config.ini"
 #endif
 
-void testHashmap(){
-    PomMapCtx hashMapCtx;
-    pomMapInit( &hashMapCtx, 0 );
-
-    pomMapSet( &hashMapCtx, "Test", "Value" );
-
-    const char * str = pomMapGet( &hashMapCtx, "Test", NULL );
-
-    printf( "%s\n", str );
-
-    pomMapClear( &hashMapCtx );
-    return;
-
-}
-
 int main( int argc, char ** argv ){
     printf( "Program Entry\n" );
 
@@ -37,7 +22,6 @@ int main( int argc, char ** argv ){
         configPath = DEFAULT_CONFIG_PATH;
     }
     printf( "Config file: %s\n", configPath );
-    testHashmap();
 /*
     SystemConfig sysConfig;
     if( loadSystemConfig( configPath, &sysConfig ) ){

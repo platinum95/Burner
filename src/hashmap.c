@@ -4,7 +4,8 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define POM_MAP_DEFAULT_SIZE 32
+#define POM_MAP_DEFAULT_SIZE 32 // Default number of buckets in list
+#define POM_MAP_HEAP_SIZE 256   // Default size of the data heaps
 
 typedef struct PomMapNode{
     const char * key;
@@ -14,6 +15,13 @@ typedef struct PomMapNode{
 
 struct PomMapBucket{
     PomMapNode * listHead;
+};
+
+struct PomMapDataHeap{
+    char * heap;
+    uint32_t numHeapBlocks;
+    size_t heapUsed;
+
 };
 
 inline uint32_t pomNextPwrTwo( uint32_t _size );
@@ -57,103 +65,142 @@ int pomMapInit( PomMapCtx *_ctx, uint32_t _size ){
     
     // Allocate space for buckets, and zero the memory (set all list heads to NULL)
     _ctx->buckets = (PomMapBucket*) calloc( _size, sizeof( PomMapBucket ) );
+    _ctx->dataHeap = (PomMapDataHeap*) calloc( _size, sizeof( PomMapDataHeap ) );
+    _ctx->dataHeap->heap = (char*) calloc( POM_MAP_HEAP_SIZE, sizeof( char ) );
+    _ctx->dataHeap->numHeapBlocks = 1;
+    _ctx->dataHeap->heapUsed = 0;
     _ctx->initialised = true;
     _ctx->numBuckets = _size;
     _ctx->numNodes = 0;
     return 0;
 }
 
-// Get a key if it exists, return `_default` otherwise
-const char* pomMapGet( PomMapCtx *_ctx, const char * _key, const char * _default ){
+
+int pomMapAddData( PomMapCtx *_ctx, const char *_key, const char *_value ){
+    // TODO add error handling in this function
+
+    size_t curSize = _ctx->dataHeap->numHeapBlocks * POM_MAP_HEAP_SIZE;
+    size_t curUsed = _ctx->dataHeap->heapUsed;
+    size_t keyLen = strlen( _key ) + 1;
+    size_t valLen = strlen( _value ) + 1;
+    size_t newDataLen = keyLen + valLen;
+    size_t newHeapUsed = curUsed + newDataLen;
+
+    if( newHeapUsed > curSize ){
+        // Increase block size
+        _ctx->dataHeap->numHeapBlocks++;
+        size_t newHeapSize = _ctx->dataHeap->numHeapBlocks * POM_MAP_HEAP_SIZE;
+        // TODO check for error on realloc
+        _ctx->dataHeap->heap = realloc( _ctx->dataHeap->heap, newHeapSize );
+        // Call recursively in case the new key/value pair exceeds block size
+        // TODO change this from recursive to just checking for that here
+        return pomMapAddData( _ctx, _key, _value );
+    }
+    // From here we have enough space in the heap for the new data
+    char * keyLoc = _ctx->dataHeap->heap + curUsed;
+    memcpy( keyLoc, _key, keyLen );
+    curUsed += keyLen;
+    char * valLoc = _ctx->dataHeap->heap + curUsed;
+    memcpy( valLoc, _value, valLen );
+    _ctx->dataHeap->heapUsed = curUsed + valLen;
+
+    // Return the new data locations in the original params
+    _key = keyLoc;
+    _value = valLoc;
+
+    return 0;
+}
+
+PomMapNode * pomMapCreateNode( PomMapCtx *_ctx, const char *_key, const char *_value ){
+    pomMapAddData( _ctx, _key, _value );
+    // Now create the new node
+    PomMapNode * newNode = (PomMapNode*) malloc( sizeof( PomMapNode ) );
+    newNode->key = _key;
+    newNode->value = _value;
+    newNode->next = NULL;
+    
+    return newNode;
+}
+
+// Return a double pointer to either a true node, or a reference to
+// a node (ie `next` ptr in linked list)
+PomMapNode ** pomMapGetNodeRef( PomMapCtx *_ctx, const char *_key ){
     uint32_t idx = pomMapHashFunc( _ctx, _key );
     PomMapBucket * bucket = &_ctx->buckets[ idx ];
-    PomMapNode * node = bucket->listHead;
-    while( node ){
-        if( strcmp( _key, node->key ) == 0 ){
-            return node->value;
+    PomMapNode ** node = &(bucket->listHead);
+    while( *node ){
+        if( strcmp( _key, (*node)->key ) == 0 ){
+            return node;
             break;
         }
-        node = node->next;
+        node = &(*node)->next;
     }
-    return _default;
+    return node;
+}
+
+// Get a key if it exists, return `_default` otherwise
+const char* pomMapGet( PomMapCtx *_ctx, const char * _key, const char * _default ){
+
+    PomMapNode ** node = pomMapGetNodeRef( _ctx, _key );
+    if( !*node ){
+        // Node was not found
+        return _default;
+    }
+    // Node was found
+    return (*node)->key;
 }
 
 // Set a key to a given value
 const char* pomMapSet( PomMapCtx *_ctx, const char * _key, const char * _value ){
-    uint32_t idx = pomMapHashFunc( _ctx, _key );
-    PomMapBucket * bucket = &_ctx->buckets[ idx ];
-    PomMapNode * node = bucket->listHead;
-    PomMapNode *pNode = NULL;
-    while( node ){
-        if( strcmp( _key, node->key ) == 0 ){
-            break;
-        }
-        pNode = node;
-        node = node->next;
-    }
-    if( node ){
-        // Found a node
-        node->value = _value;
-    }
-    else{
-        // Add a new node
-        node = (PomMapNode*) malloc( sizeof( PomMapNode ) );
-        node->key = _key;
-        node->value = _value;
-        _ctx->numNodes++;
-        if( pNode == NULL ){
-            // First node in bucket
-            bucket->listHead = node;
-        }
-        else{
-            // Otherwise add to linked list
-            pNode->next = node;
-        }
+    PomMapNode ** node = pomMapGetNodeRef( _ctx, _key );
+    if( *node ){
+        // Node exists, so set data
+        pomMapAddData( _ctx, _key, _value );
+        (*node)->key = _key;
+        (*node)->value = _value;
+        return _value;
     }
 
+    // Node doesn't exist so needs to be added
+    PomMapNode * newNode = pomMapCreateNode( _ctx, _key, _value );
+    // Node points to the `next` ptr in the linked list of a given bucket
+    *node = newNode;
+    _ctx->numNodes++;
+
+    // Check if we need to resize
     if( _ctx->numNodes > _ctx->numBuckets ){
         // Resize the bucket array
         uint32_t newSize = _ctx->numBuckets << 1;
         pomMapResize( _ctx, newSize );
     }
-    
-    return _value;
+
+    // Resize may have shuffled data around, so return a valid value pointer
+    return newNode->value;
 }
 
 // Get a key if it exists, otherwise add a new node with value `_default`
 const char* pomMapGetSet( PomMapCtx *_ctx, const char * _key, const char * _default ){
-    uint32_t idx = pomMapHashFunc( _ctx, _key );
-    PomMapBucket * bucket = &_ctx->buckets[ idx ];
-    PomMapNode * node = bucket->listHead;
-    PomMapNode *pNode = NULL;
-    while( node ){
-        if( strcmp( _key, node->key ) == 0 ){
-            break;
-        }
-        pNode = node;
-        node = node->next;
+    PomMapNode ** node = pomMapGetNodeRef( _ctx, _key );
+    if( *node ){
+        // Node exists, so return data
+        return (*node)->value;
     }
-    if( node ){
-        // Found a node
-        return node->value;
+
+        // Node doesn't exist so needs to be added
+    PomMapNode * newNode = pomMapCreateNode( _ctx, _key, _default );
+    // Node points to the `next` ptr in the linked list of a given bucket
+    *node = newNode;
+    _ctx->numNodes++;
+
+    // Check if we need to resize
+    if( _ctx->numNodes > _ctx->numBuckets ){
+        // Resize the bucket array
+        uint32_t newSize = _ctx->numBuckets << 1;
+        pomMapResize( _ctx, newSize );
     }
-    else{
-        // Add a new node
-        node = (PomMapNode*) malloc( sizeof( PomMapNode ) );
-        node->key = _key;
-        node->value = _default;
-        _ctx->numNodes++;
-        if( pNode == NULL ){
-            // First node in bucket
-            bucket->listHead = node;
-        }
-        else{
-            // Otherwise add to linked list
-            pNode->next = node;
-        }
-    }
-    
-    return _default;
+
+    // Resize may have shuffled data around, so return a valid value pointer
+    return newNode->value;
 }
 
 
@@ -178,6 +225,7 @@ int pomMapClear( PomMapCtx *_ctx ){
 
 // Suggest a resize to the map
 int pomMapResize( PomMapCtx *_ctx, uint32_t _size ){
+    // TODO - optimise the data heap here
     if( !_ctx->initialised || _size <= _ctx->numBuckets ){
         // No need to resize
         return 1;
