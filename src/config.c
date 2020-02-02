@@ -7,6 +7,8 @@
 
 #define LOG( log, ... ) LOG_MODULE( DEBUG, config, log, ##__VA_ARGS__ )
 
+static const char separator = '=';
+
 void createDefaultConfig( SystemConfig * _config ){
     _config->initialised = true;
     pomMapInit( &_config->mapCtx, 0 );
@@ -87,12 +89,12 @@ int loadSystemConfig( const char * path, SystemConfig * config ){
                 // Add the key-value pair to list
                 //getKeyValue( &(config->keyPairArray), keyStart, valueStart );
                 pomMapSet( &config->mapCtx, keyStart, valueStart );
-                LOG( "Adding %s:%s", keyStart, valueStart );
+                //LOG( "Adding %s=%s", keyStart, valueStart );
             }
             lastEnd = cIdx + 1;
         }
         // If we've found a separator, mark its location
-        else if( configStr[ cIdx ] == ':' ){
+        else if( configStr[ cIdx ] == separator ){
             lastSep = cIdx + 1;
             // Set seperator to nullchar for easier splitting
             configStr[ cIdx ] = '\0';
@@ -127,7 +129,7 @@ int saveSystemConfig( SystemConfig * _config, const char * path ){
         if( *currChar == '\0' ){
             if( onKey ){
                 // Reached null-terminator of key, so add separator
-                *currChar = ':';
+                *currChar = separator;
             }
             else{
                 // Reached end of key/value pair, add newline
@@ -172,42 +174,3 @@ int clearSystemConfig( SystemConfig * config ){
     }
     return 1;
 }
-
-
-/*
-// Search for a key/value from a given node. If key is found, return pointer to the pair.
-// If key is not found, add a new pair if (and only if) `value` is not NULL
-ConfigKeyPair * getKeyValue( ConfigKeyPair * node, const char * key, const char * value ){
-    ConfigKeyPair ** childNode;
-    const char * currNodeKey = node->key;
-    int strComp = strcmp( currNodeKey, key );
-    if( strComp == 0 ){
-        // Found the key
-        return node;
-    }
-    else if( strComp > 0 ){
-        childNode = &node->left;
-    }
-    else{
-        childNode = &node->right;
-    }
-
-    if( !*childNode ){
-        // Child does not exist in list, so key is not in list
-        if( !value ){
-            // Not adding a new node
-            return NULL;
-        }
-        // Add new node
-        ConfigKeyPair * newNode = (ConfigKeyPair*) malloc( sizeof( ConfigKeyPair ) );
-        newNode->left = NULL;
-        newNode->right = NULL;
-        newNode->key = key;
-        newNode->value = value;
-        *childNode = newNode;
-        return newNode;
-    }
-    
-    return getKeyValue( *childNode, key, value );
-}
-*/

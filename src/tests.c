@@ -31,7 +31,10 @@ void testConfig(){
         LOG( "Model base path: %s", testPath );
     }
 
-    pomMapSet( &sysConfig.mapCtx, "TestAdd", "NewVal" );
+    pomMapSet( &sysConfig.mapCtx, "Delete", "Me" );
+    if( pomMapRemove( &sysConfig.mapCtx, "Delete" ) ){
+        LOG( "Could not remove node" );
+    }
 
     saveSystemConfig( &sysConfig, "./testSave.ini" );
     

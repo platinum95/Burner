@@ -13,8 +13,10 @@
 #define POM_MAP_HEAP_SIZE 256   // Default size of the data heaps
 
 typedef struct PomMapNode{
-    const char * key;
-    const char * value;
+    //const char * key;
+    //const char * value;
+    size_t keyOffset;
+    size_t valueOffset;
     struct PomMapNode * next;
 }PomMapNode;
 
@@ -26,11 +28,13 @@ struct PomMapDataHeap{
     char * heap;
     uint32_t numHeapBlocks;
     size_t heapUsed;
-
+    size_t fragmentedData;
 };
 
 inline uint32_t pomNextPwrTwo( uint32_t _size );
 inline uint32_t pomMapHashFunc( PomMapCtx *_ctx, const char * key );
+inline const char * pomMapGetNodeKey( PomMapCtx * _ctx, PomMapNode * _node );
+inline const char * pomMapGetNodeValue( PomMapCtx * _ctx, PomMapNode * _node );
 
 uint32_t pomNextPwrTwo( uint32_t _size ){
     // From bit-twiddling hacks (Stanford)
@@ -59,6 +63,14 @@ uint32_t pomMapHashFunc( PomMapCtx *_ctx, const char * key ){
     return hash & ( _ctx->numBuckets - 1 );
 }
 
+const char * pomMapGetNodeKey( PomMapCtx * _ctx, PomMapNode * _node ){
+    return (const char *) (_ctx->dataHeap->heap + _node->keyOffset);
+}
+
+const char * pomMapGetNodeValue( PomMapCtx * _ctx, PomMapNode * _node ){
+    return (const char *) (_ctx->dataHeap->heap + _node->valueOffset);
+}
+
 // Initialise the map with optional starting size suggestion
 int pomMapInit( PomMapCtx *_ctx, uint32_t _size ){
     if( _size == 0 ){
@@ -74,6 +86,7 @@ int pomMapInit( PomMapCtx *_ctx, uint32_t _size ){
     _ctx->dataHeap->heap = (char*) calloc( POM_MAP_HEAP_SIZE, sizeof( char ) );
     _ctx->dataHeap->numHeapBlocks = 1;
     _ctx->dataHeap->heapUsed = 0;
+    _ctx->dataHeap->fragmentedData = 0;
     _ctx->initialised = true;
     _ctx->numBuckets = _size;
     _ctx->numNodes = 0;
@@ -83,50 +96,59 @@ int pomMapInit( PomMapCtx *_ctx, uint32_t _size ){
 }
 
 
-int pomMapAddData( PomMapCtx *_ctx, const char *_key, const char *_value ){
+int pomMapAddData( PomMapCtx *_ctx, const char **_key, const char **_value ){
     // TODO add error handling in this function
 
     size_t curSize = _ctx->dataHeap->numHeapBlocks * POM_MAP_HEAP_SIZE;
     size_t curUsed = _ctx->dataHeap->heapUsed;
-    size_t keyLen = strlen( _key ) + 1;
-    size_t valLen = strlen( _value ) + 1;
+    size_t keyLen = strlen( *_key ) + 1;
+    size_t valLen = strlen( *_value ) + 1;
     size_t newDataLen = keyLen + valLen;
     size_t newHeapUsed = curUsed + newDataLen;
 
-    LOG( "Adding data %s:%s to heap", _key, _value );
+    //LOG( "Adding data %s:%s to heap", *_key, *_value );
 
     if( newHeapUsed > curSize ){
         // Increase block size
         _ctx->dataHeap->numHeapBlocks++;
         size_t newHeapSize = _ctx->dataHeap->numHeapBlocks * POM_MAP_HEAP_SIZE;
-        LOG( "Increasing heap size to %ul", (unsigned int) newHeapSize );
+        LOG( "Increasing heap size to %zu", newHeapSize );
         // TODO check for error on realloc
         _ctx->dataHeap->heap = realloc( _ctx->dataHeap->heap, newHeapSize );
         // Call recursively in case the new key/value pair exceeds block size
         // TODO change this from recursive to just checking for that here
-        return pomMapAddData( _ctx, _key, _value );
+         return pomMapAddData( _ctx, _key, _value );
+        
+        // Data is all in heap, but address may have changed so node key/value pointers are invalid. Need to update.
+        // (or zero the memory and re-allocate everything)
     }
     // From here we have enough space in the heap for the new data
     char * keyLoc = _ctx->dataHeap->heap + curUsed;
-    memcpy( keyLoc, _key, keyLen );
+    memcpy( keyLoc, *_key, keyLen );
     curUsed += keyLen;
     char * valLoc = _ctx->dataHeap->heap + curUsed;
-    memcpy( valLoc, _value, valLen );
+    memcpy( valLoc, *_value, valLen );
     _ctx->dataHeap->heapUsed = curUsed + valLen;
 
     // Return the new data locations in the original params
-    _key = keyLoc;
-    _value = valLoc;
+    *_key = keyLoc;
+    *_value = valLoc;
 
     return 0;
 }
 
 PomMapNode * pomMapCreateNode( PomMapCtx *_ctx, const char *_key, const char *_value ){
-    pomMapAddData( _ctx, _key, _value );
+    pomMapAddData( _ctx, &_key, &_value );
+    // Need to get the key/value offsets into the heap
+    size_t keyOffset = _key - _ctx->dataHeap->heap;
+    size_t valueOffset = _value - _ctx->dataHeap->heap;
+
     // Now create the new node
     PomMapNode * newNode = (PomMapNode*) malloc( sizeof( PomMapNode ) );
-    newNode->key = _key;
-    newNode->value = _value;
+    //newNode->key = _key;
+    //newNode->value = _value;
+    newNode->keyOffset = keyOffset;
+    newNode->valueOffset = valueOffset;
     newNode->next = NULL;
     
     return newNode;
@@ -139,7 +161,8 @@ PomMapNode ** pomMapGetNodeRef( PomMapCtx *_ctx, const char *_key ){
     PomMapBucket * bucket = &_ctx->buckets[ idx ];
     PomMapNode ** node = &(bucket->listHead);
     while( *node ){
-        if( strcmp( _key, (*node)->key ) == 0 ){
+        const char * nodeKeyStr = pomMapGetNodeKey( _ctx, *node );
+        if( strcmp( _key, nodeKeyStr ) == 0 ){
             return node;
             break;
         }
@@ -148,7 +171,7 @@ PomMapNode ** pomMapGetNodeRef( PomMapCtx *_ctx, const char *_key ){
     return node;
 }
 
-// Get a key if it exists, return `_default` otherwise
+// Get a value if it exists, return `_default` otherwise
 const char* pomMapGet( PomMapCtx *_ctx, const char * _key, const char * _default ){
 
     PomMapNode ** node = pomMapGetNodeRef( _ctx, _key );
@@ -156,8 +179,8 @@ const char* pomMapGet( PomMapCtx *_ctx, const char * _key, const char * _default
         // Node was not found
         return _default;
     }
-    // Node was found
-    return (*node)->key;
+    // Node was found, return its value
+    return pomMapGetNodeValue( _ctx, *node );
 }
 
 // Set a key to a given value
@@ -165,9 +188,20 @@ const char* pomMapSet( PomMapCtx *_ctx, const char * _key, const char * _value )
     PomMapNode ** node = pomMapGetNodeRef( _ctx, _key );
     if( *node ){
         // Node exists, so set data
-        pomMapAddData( _ctx, _key, _value );
-        (*node)->key = _key;
-        (*node)->value = _value;
+        LOG( "Setting existing key %s", _key );
+        // Get node's current memory footprint and add it to fragmented data record
+        size_t currKeyLen = strlen( pomMapGetNodeKey( _ctx, *node ) ) + 1;
+        size_t currValLen = strlen( pomMapGetNodeValue( _ctx, *node ) ) + 1;
+        _ctx->dataHeap->fragmentedData += currKeyLen + currValLen;
+
+        // Add new key/value pair to list
+        pomMapAddData( _ctx, &_key, &_value );
+        size_t keyOffset = _key - _ctx->dataHeap->heap;
+        size_t valueOffset = _value - _ctx->dataHeap->heap;
+        (*node)->keyOffset = keyOffset;
+        (*node)->valueOffset = valueOffset;
+        //(*node)->key = _key;
+        //(*node)->value = _value;
         return _value;
     }
 
@@ -185,7 +219,7 @@ const char* pomMapSet( PomMapCtx *_ctx, const char * _key, const char * _value )
     }
 
     // Resize may have shuffled data around, so return a valid value pointer
-    return newNode->value;
+    return pomMapGetNodeValue( _ctx, newNode );
 }
 
 // Get a key if it exists, otherwise add a new node with value `_default`
@@ -193,10 +227,10 @@ const char* pomMapGetSet( PomMapCtx *_ctx, const char * _key, const char * _defa
     PomMapNode ** node = pomMapGetNodeRef( _ctx, _key );
     if( *node ){
         // Node exists, so return data
-        return (*node)->value;
+        return pomMapGetNodeValue( _ctx, *node );
     }
 
-        // Node doesn't exist so needs to be added
+    // Node doesn't exist so needs to be added
     PomMapNode * newNode = pomMapCreateNode( _ctx, _key, _default );
     // Node points to the `next` ptr in the linked list of a given bucket
     *node = newNode;
@@ -210,8 +244,30 @@ const char* pomMapGetSet( PomMapCtx *_ctx, const char * _key, const char * _defa
     }
 
     // Resize may have shuffled data around, so return a valid value pointer
-    return newNode->value;
+    return pomMapGetNodeValue( _ctx, newNode );
 }
+
+
+// Remove a key
+int pomMapRemove( PomMapCtx *_ctx, const char * _key ){
+    PomMapNode ** node = pomMapGetNodeRef( _ctx, _key );
+    if( !*node ){
+        // Node doesn't exist so exit
+        return 1;
+    }
+    LOG( "Removing node %s", _key );
+    size_t currKeyLen = strlen( pomMapGetNodeKey( _ctx, *node ) ) + 1;
+    size_t currValLen = strlen( pomMapGetNodeValue( _ctx, *node ) ) + 1;
+    _ctx->dataHeap->fragmentedData += currKeyLen + currValLen;
+    PomMapNode **nodeToDel = node;
+    *node = (*node)->next;
+    free( *nodeToDel );
+    return 0;
+}
+
+// TODO - keep track of unnecessary strings (from removed/updated key/values),
+// then when requiring a resize of the heap check if its useful to also optimise
+// the heap to take out the old strings (i.e. if you'd free more than 10% of the heap)
 
 
 // Clean up the map
@@ -234,6 +290,9 @@ int pomMapClear( PomMapCtx *_ctx ){
     if( freeCnt != _ctx->numNodes ){
         LOG( "Number of freed nodes (%i) not equal to number of recorded nodes (%i)", freeCnt, _ctx->numNodes );
     }
+    free( _ctx->dataHeap->heap );
+    LOG( "Freed data heap of size %i", _ctx->dataHeap->numHeapBlocks * POM_MAP_HEAP_SIZE );
+    free( _ctx->dataHeap );
     _ctx->numNodes = 0;
     _ctx->numBuckets = 0;
     _ctx->initialised = false;
@@ -256,6 +315,7 @@ int pomMapResize( PomMapCtx *_ctx, uint32_t _size ){
     // Construct long linked list from all nodes
     PomMapNode * nodeHead = NULL;
     PomMapNode * lastNode = NULL;
+    uint32_t nodesCounted = 0;
     for( int i = 0; i < _ctx->numBuckets; i++ ){
         PomMapBucket * curBucket = &_ctx->buckets[ i ];
         PomMapNode * nodeIter = curBucket->listHead;
@@ -266,21 +326,27 @@ int pomMapResize( PomMapCtx *_ctx, uint32_t _size ){
         if( !nodeHead ){
             // First node in the big list
             nodeHead = nodeIter;
+            nodesCounted++;
         }
         else{
             // Connect up first node in this bucket to last node in last bucket
             lastNode->next = nodeIter;
+            nodesCounted++;
         }
         while( nodeIter->next ){
             // Cycle through to find the last node in this bucket
             nodeIter = nodeIter->next;
+            nodesCounted++;
         }
         lastNode = nodeIter;
     }
-    
+    if( nodesCounted != _ctx->numNodes ){
+        LOG( "Counted %i nodes, but have %i on record", nodesCounted, _ctx->numNodes );
+    }
     // Now reallocate the bucket array with the new size and zero it
-    _ctx->buckets = (PomMapBucket*) realloc( _ctx->buckets, _size );
+    _ctx->buckets = (PomMapBucket*) realloc( _ctx->buckets, sizeof( PomMapBucket ) * _size );
     memset( _ctx->buckets, 0, sizeof( PomMapBucket ) *_size );
+    _ctx->numBuckets = _size;
 
     // Add all nodes from linked list to new bucket array
     PomMapNode * curNode = nodeHead;
@@ -288,8 +354,9 @@ int pomMapResize( PomMapCtx *_ctx, uint32_t _size ){
         PomMapNode * nextNode = curNode->next;
         // Break apart the list as we go
         curNode->next = NULL;
-
-        uint32_t idx = pomMapHashFunc( _ctx, curNode->key );
+        const char * currNodeKey = pomMapGetNodeKey( _ctx, curNode );
+        //uint32_t idx = pomMapHashFunc( _ctx, curNode->key );
+        uint32_t idx = pomMapHashFunc( _ctx, currNodeKey );
         PomMapBucket * bucket = &_ctx->buckets[ idx ];
         PomMapNode ** node = &(bucket->listHead);
 
@@ -309,7 +376,20 @@ int pomMapResize( PomMapCtx *_ctx, uint32_t _size ){
 
 int pomMapOptimise( PomMapCtx *_ctx ){
     // Count the required bytes of all nodes
-    size_t totalBytesReq = _ctx->dataHeap->heapUsed;
+    size_t totalBytesReq = 0;
+    for( int i = 0; i < _ctx->numBuckets; i++ ){
+        PomMapBucket * curBucket = &_ctx->buckets[ i ];
+        PomMapNode * nodeIter = curBucket->listHead;
+        while( nodeIter ){
+            const char * key = pomMapGetNodeKey( _ctx, nodeIter );
+            const char * val = pomMapGetNodeValue( _ctx, nodeIter );
+            size_t keyLen = strlen( key ) + 1;
+            size_t valLen = strlen( val ) + 1;
+            totalBytesReq += keyLen + valLen;
+            nodeIter = nodeIter->next;
+        }
+    }
+    //size_t totalBytesReq = _ctx->dataHeap->heapUsed;
     size_t currHeapSize = _ctx->dataHeap->numHeapBlocks * POM_MAP_HEAP_SIZE;
 
     // Check if we can downsize the heap
@@ -326,8 +406,8 @@ int pomMapOptimise( PomMapCtx *_ctx ){
         PomMapBucket * curBucket = &_ctx->buckets[ i ];
         PomMapNode * nodeIter = curBucket->listHead;
         while( nodeIter ){
-            const char * key = nodeIter->key;
-            const char * val = nodeIter->value;
+            const char * key = pomMapGetNodeKey( _ctx, nodeIter );
+            const char * val = pomMapGetNodeValue( _ctx, nodeIter );
             size_t keyLen = strlen( key ) + 1;
             size_t valLen = strlen( val ) + 1;
             char * newKey = newHeap + currOffset;
@@ -336,17 +416,22 @@ int pomMapOptimise( PomMapCtx *_ctx ){
             memcpy( newKey, key, keyLen );
             memcpy( newVal, val, valLen );
 
-            nodeIter->key = newKey;
-            nodeIter->value = newVal;
+            size_t keyOffset = newKey - newHeap;
+            size_t valOffset = newVal - newHeap;
+            nodeIter->keyOffset = keyOffset;
+            nodeIter->valueOffset = valOffset;
+            //nodeIter->key = newKey;
+            //nodeIter->value = newVal;
             nodeIter = nodeIter->next;
             currOffset += keyLen + valLen;            
         }
     }
-    
+    _ctx->dataHeap->heapUsed = totalBytesReq;
     // Free up the old heap and update the context with the new heap
     free( _ctx->dataHeap->heap );
     _ctx->dataHeap->heap = newHeap;
     _ctx->dataHeap->numHeapBlocks = blocksReq;
+    _ctx->dataHeap->fragmentedData = 0;
 
     return 0;
 }

@@ -28,6 +28,9 @@ const char* pomMapSet( PomMapCtx *_ctx, const char * _key, const char * _value )
 // Get a key if it exists, otherwise add a new node with value `_default`
 const char* pomMapGetSet( PomMapCtx *_ctx, const char * _key, const char * _default );
 
+// Remove a key
+int pomMapRemove( PomMapCtx *_ctx, const char * _key );
+
 // Clean up the map
 int pomMapClear( PomMapCtx *_ctx );
 
