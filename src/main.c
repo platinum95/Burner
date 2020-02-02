@@ -3,14 +3,20 @@
 #include "config.h"
 #include "system_hw.h"
 #include "hashmap.h"
+#include "common.h"
+
+// Just going to use debug level for now
+#define LOG( log, ... ) LOG_MODULE( DEBUG, main, log, ##__VA_ARGS__ )
 
 // Allow default config path to be overruled by compile option
 #ifndef DEFAULT_CONFIG_PATH
 #define DEFAULT_CONFIG_PATH "./config.ini"
 #endif
 
+int testModules();
+
 int main( int argc, char ** argv ){
-    printf( "Program Entry\n" );
+    LOG( "Program Entry" );
 
     char * configPath;
     // Single argument pointing to config file,
@@ -21,7 +27,8 @@ int main( int argc, char ** argv ){
     else{
         configPath = DEFAULT_CONFIG_PATH;
     }
-    printf( "Config file: %s\n", configPath );
+    LOG( "Config file: %s", configPath );
+    testModules();
 /*
     SystemConfig sysConfig;
     if( loadSystemConfig( configPath, &sysConfig ) ){
@@ -35,6 +42,6 @@ int main( int argc, char ** argv ){
     
     clearSystemConfig( &sysConfig );
 */
-    printf( "Program exit\n" );
+    LOG( "Program exit" );
     return EXIT_SUCCESS;
 }

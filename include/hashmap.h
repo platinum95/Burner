@@ -1,5 +1,9 @@
+#ifndef HASHMAP_H
+#define HASHMAP_H
+
 #include <stdint.h>
 #include <stdbool.h>
+#include <stddef.h>
 
 typedef struct PomMapBucket PomMapBucket;
 typedef struct PomMapDataHeap PomMapDataHeap;
@@ -32,3 +36,8 @@ int pomMapResize( PomMapCtx *_ctx, uint32_t _size );
 
 // Try optimise the data stored to help with caching
 int pomMapOptimise( PomMapCtx *_ctx );
+
+// Request an immutable pointer to the data heap
+const char * pomMapGetDataHeap( PomMapCtx *_ctx, size_t *_heapUsed, size_t *_heapSize );
+
+#endif // HASHMAP_H

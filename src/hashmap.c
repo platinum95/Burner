@@ -3,6 +3,11 @@
 
 #include <stdlib.h>
 #include <string.h>
+#include <stdio.h>
+#include "common.h"
+
+#define LOG( log, ... ) LOG_MODULE( DEBUG, hashmap, log, ##__VA_ARGS__ )
+
 
 #define POM_MAP_DEFAULT_SIZE 32 // Default number of buckets in list
 #define POM_MAP_HEAP_SIZE 256   // Default size of the data heaps
@@ -72,6 +77,8 @@ int pomMapInit( PomMapCtx *_ctx, uint32_t _size ){
     _ctx->initialised = true;
     _ctx->numBuckets = _size;
     _ctx->numNodes = 0;
+    LOG( "Map initialised with heap size %i", 1 );
+
     return 0;
 }
 
@@ -86,10 +93,13 @@ int pomMapAddData( PomMapCtx *_ctx, const char *_key, const char *_value ){
     size_t newDataLen = keyLen + valLen;
     size_t newHeapUsed = curUsed + newDataLen;
 
+    LOG( "Adding data %s:%s to heap", _key, _value );
+
     if( newHeapUsed > curSize ){
         // Increase block size
         _ctx->dataHeap->numHeapBlocks++;
         size_t newHeapSize = _ctx->dataHeap->numHeapBlocks * POM_MAP_HEAP_SIZE;
+        LOG( "Increasing heap size to %ul", (unsigned int) newHeapSize );
         // TODO check for error on realloc
         _ctx->dataHeap->heap = realloc( _ctx->dataHeap->heap, newHeapSize );
         // Call recursively in case the new key/value pair exceeds block size
@@ -206,6 +216,8 @@ const char* pomMapGetSet( PomMapCtx *_ctx, const char * _key, const char * _defa
 
 // Clean up the map
 int pomMapClear( PomMapCtx *_ctx ){
+    LOG( "Clearing hashmap" );
+    int freeCnt = 0;
     for( int i = 0; i < _ctx->numBuckets; i++ ){
         PomMapBucket * curBucket = &_ctx->buckets[ i ];
         PomMapNode * curNode = curBucket->listHead;
@@ -214,9 +226,14 @@ int pomMapClear( PomMapCtx *_ctx ){
             nextNode = curNode->next;
             free( curNode );
             curNode = nextNode;
+            freeCnt++;
         }
     }
     free( _ctx->buckets );
+    LOG( "Cleared %i buckets and %i nodes", _ctx->numBuckets, freeCnt );
+    if( freeCnt != _ctx->numNodes ){
+        LOG( "Number of freed nodes (%i) not equal to number of recorded nodes (%i)", freeCnt, _ctx->numNodes );
+    }
     _ctx->numNodes = 0;
     _ctx->numBuckets = 0;
     _ctx->initialised = false;
@@ -228,11 +245,13 @@ int pomMapResize( PomMapCtx *_ctx, uint32_t _size ){
     // TODO - optimise the data heap here
     if( !_ctx->initialised || _size <= _ctx->numBuckets ){
         // No need to resize
+        LOG( "Not resizing" );
         return 1;
     }
 
     // Round `_size` to a power of 2
     _size = pomNextPwrTwo( _size );
+    LOG( "Resizing map to %i", _size );
 
     // Construct long linked list from all nodes
     PomMapNode * nodeHead = NULL;
@@ -285,4 +304,59 @@ int pomMapResize( PomMapCtx *_ctx, uint32_t _size ){
     }
 
     return 0;
+}
+
+
+int pomMapOptimise( PomMapCtx *_ctx ){
+    // Count the required bytes of all nodes
+    size_t totalBytesReq = _ctx->dataHeap->heapUsed;
+    size_t currHeapSize = _ctx->dataHeap->numHeapBlocks * POM_MAP_HEAP_SIZE;
+
+    // Check if we can downsize the heap
+    // Rounding up by x/y -> (x+y-1)/y
+    uint32_t blocksReq = ( totalBytesReq + POM_MAP_HEAP_SIZE - 1 ) / POM_MAP_HEAP_SIZE;
+    size_t newHeapSize = blocksReq * POM_MAP_HEAP_SIZE;
+    LOG( "Current heap size: %zu. Total bytes required %zu", currHeapSize, newHeapSize );
+    // Create new heap to copy data into
+    char * newHeap = (char*) malloc( sizeof( char ) * newHeapSize );
+    size_t currOffset = 0;
+    LOG( "Reordering hashmap" );
+    // Copy the data to the new buffer and update the key/value pointers
+    for( int i = 0; i < _ctx->numBuckets; i++ ){
+        PomMapBucket * curBucket = &_ctx->buckets[ i ];
+        PomMapNode * nodeIter = curBucket->listHead;
+        while( nodeIter ){
+            const char * key = nodeIter->key;
+            const char * val = nodeIter->value;
+            size_t keyLen = strlen( key ) + 1;
+            size_t valLen = strlen( val ) + 1;
+            char * newKey = newHeap + currOffset;
+            char * newVal = newKey + keyLen;
+
+            memcpy( newKey, key, keyLen );
+            memcpy( newVal, val, valLen );
+
+            nodeIter->key = newKey;
+            nodeIter->value = newVal;
+            nodeIter = nodeIter->next;
+            currOffset += keyLen + valLen;            
+        }
+    }
+    
+    // Free up the old heap and update the context with the new heap
+    free( _ctx->dataHeap->heap );
+    _ctx->dataHeap->heap = newHeap;
+    _ctx->dataHeap->numHeapBlocks = blocksReq;
+
+    return 0;
+}
+
+const char * pomMapGetDataHeap( PomMapCtx *_ctx, size_t *_heapUsed, size_t *_heapSize ){
+    if( _heapUsed ){
+        *_heapUsed = _ctx->dataHeap->heapUsed;
+    }
+    if( _heapSize ){
+        *_heapSize = _ctx->dataHeap->numHeapBlocks * POM_MAP_HEAP_SIZE;
+    }
+    return _ctx->dataHeap->heap;
 }
