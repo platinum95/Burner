@@ -109,6 +109,12 @@ int pomMapAddData( PomMapCtx *_ctx, const char **_key, const char **_value ){
     //LOG( "Adding data %s:%s to heap", *_key, *_value );
 
     if( newHeapUsed > curSize ){
+        // Check if it's worth optimising to remove fragmented data
+        if( _ctx->dataHeap->fragmentedData >= newDataLen ){
+            LOG( "New pair can fit in fragmented data, so optimising" );
+            pomMapOptimise( _ctx );
+            return pomMapAddData( _ctx, _key, _value );
+        }
         // Increase block size
         _ctx->dataHeap->numHeapBlocks++;
         size_t newHeapSize = _ctx->dataHeap->numHeapBlocks * POM_MAP_HEAP_SIZE;
@@ -420,8 +426,6 @@ int pomMapOptimise( PomMapCtx *_ctx ){
             size_t valOffset = newVal - newHeap;
             nodeIter->keyOffset = keyOffset;
             nodeIter->valueOffset = valOffset;
-            //nodeIter->key = newKey;
-            //nodeIter->value = newVal;
             nodeIter = nodeIter->next;
             currOffset += keyLen + valLen;            
         }
