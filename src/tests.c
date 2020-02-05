@@ -2,7 +2,9 @@
 #include "hashmap.h"
 #include "common.h"
 #include "config.h"
-
+#include "tests.h"
+#include "queue.h"
+#include <stdlib.h>
 
 // Allow default config path to be overruled by compile option
 #ifndef DEFAULT_CONFIG_PATH
@@ -13,10 +15,12 @@
 
 void testHashmap();
 void testConfig();
+void testQueues();
 
 int testModules(){
-    testHashmap();
-    testConfig();
+//    testHashmap();
+//    testConfig();
+    testQueues();
     return 0;
 }
 
@@ -54,5 +58,27 @@ void testHashmap(){
     pomMapClear( &hashMapCtx );
     return;
 
+}
+
+void testQueues(){
+    LOG( "Testing queues" );
+    PomQueueCtx *queueCtx = (PomQueueCtx*) malloc( sizeof( PomQueueCtx ) );
+    pomQueueInit( queueCtx, sizeof( uint64_t ) );
+
+    PomHpGlobalCtx *hpgctx = (PomHpGlobalCtx*) malloc( sizeof( PomHpGlobalCtx ) );
+    PomHpLocalCtx *hplctx = (PomHpLocalCtx*) malloc( sizeof( PomHpLocalCtx ) );
+
+    pomHpGlobalInit( hpgctx );
+    pomHpThreadInit( hpgctx, hplctx, 2 );
+
+    void * pushVal = (void*) 12345;
+    pomQueuePush( queueCtx, hplctx, pushVal );
+    void * val = pomQueuePop( queueCtx, hpgctx, hplctx );
+    if( val != pushVal ){
+        LOG( "Queue didn't pop same value as was pushed" );
+    }
+    else{
+        LOG( "Queue popped same value as was pushed" );
+    }
 }
 

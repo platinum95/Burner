@@ -19,6 +19,9 @@ int pomHpGlobalInit( PomHpGlobalCtx *_ctx ){
 }
 
 int pomHpThreadInit( PomHpGlobalCtx *_ctx, PomHpLocalCtx *_lctx, size_t _numHp ){
+    _lctx->rlist = (PomStackCtx*) malloc( sizeof( PomStackCtx ) );
+    pomStackInit( _lctx->rlist );
+    
     PomHpRec *newHps = (PomHpRec*) malloc( sizeof( PomHpRec ) * _numHp );
     newHps[ 0 ].hazardPtr = NULL;
     newHps[ 0 ].next = NULL;
