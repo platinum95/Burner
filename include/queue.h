@@ -6,12 +6,12 @@ typedef struct PomQueueCtx PomQueueCtx;
 
 struct PomQueueNode {
     void * data;
-    PomQueueNode * next;
+    PomQueueNode * _Atomic next;
 };
 
 struct PomQueueCtx{
-    PomQueueNode * head;
-    PomQueueNode * tail;
+    PomQueueNode * _Atomic head;
+    PomQueueNode * _Atomic tail;
 };
 
 // Initialise the thread-safe queue

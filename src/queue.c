@@ -17,15 +17,15 @@ int pomQueuePush( PomQueueCtx *_ctx, PomHpLocalCtx *_hplctx, void * _data ){
     newNode->data = _data;
     PomQueueNode *tail;
     while( 1 ){
-        tail = _ctx->tail;
+        tail = atomic_load( &_ctx->tail );
         // Ensure this is atomic
         pomHpSetHazard( _hplctx, tail, 0 );
-        if( tail != _ctx->tail ){
+        if( tail != atomic_load( &_ctx->tail ) ){
             // Tail has been updated, reloop
             continue;
         }
-        PomQueueNode * next = tail->next;
-        if( tail != _ctx->tail ){
+        PomQueueNode * next = atomic_load( &tail->next );
+        if( tail != atomic_load( &_ctx->tail ) ){
             continue;
         }
         if( next ){
@@ -46,15 +46,15 @@ void * pomQueuePop( PomQueueCtx *_ctx, PomHpGlobalCtx *_hpctx, PomHpLocalCtx *_h
     PomQueueNode *head, *tail, *next;
     void *data;
     while( 1 ){
-        head = _ctx->head;
+        head = atomic_load( &_ctx->head );
         pomHpSetHazard( _hplctx, head, 0 );
-        if( head != _ctx->head ){
+        if( head != atomic_load( &_ctx->head ) ){
             continue;
         }
-        tail = _ctx->tail;
-        next = head->next;
+        tail = atomic_load( &_ctx->tail );
+        next = atomic_load( &head->next );
         pomHpSetHazard( _hplctx, next, 1 );
-        if( head != _ctx->head ){
+        if( head != atomic_load( &_ctx->head ) ){
             continue;
         }
         if( !next ){

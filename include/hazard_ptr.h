@@ -7,8 +7,8 @@ typedef struct PomHpGlobalCtx PomHpGlobalCtx;
 typedef struct PomHpLocalCtx PomHpLocalCtx;
 
 struct PomHpGlobalCtx{
-    PomHpRec *hpHead;
-    size_t rNodeThreshold;
+    PomHpRec * _Atomic hpHead; // Atomic pointer to a hp record
+    _Atomic size_t rNodeThreshold;
 };
 
 struct PomHpLocalCtx{

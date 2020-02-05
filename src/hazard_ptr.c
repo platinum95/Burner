@@ -4,30 +4,31 @@
 
 
 struct PomHpRec{
-    void *hazardPtr;
-    volatile PomHpRec *next;
+    void * _Atomic hazardPtr; // Atomic pointer to the hazard pointer
+    PomHpRec * _Atomic next; // Atomic pointer to the next record
 };
 
 int pomHpScan( PomHpGlobalCtx *_ctx, PomHpLocalCtx *_lctx );
 
 int pomHpGlobalInit( PomHpGlobalCtx *_ctx ){
-    _ctx->hpHead = (PomHpRec*) malloc( sizeof( PomHpRec ) ); // Dummy node
-    _ctx->hpHead->next = NULL;
-    _ctx->hpHead->hazardPtr = NULL;
-    _ctx->rNodeThreshold = 10; // TODO have a proper threshold
+    PomHpRec* newHead = (PomHpRec*) malloc( sizeof( PomHpRec ) ); // Dummy node
+    atomic_init( &_ctx->hpHead, newHead );
+    atomic_init( &_ctx->hpHead->next, NULL );
+    atomic_init( &_ctx->hpHead->hazardPtr, NULL );
+    atomic_init( &_ctx->rNodeThreshold, 10 ); // TODO have a proper threshold
     return 0;
 }
 
 int pomHpThreadInit( PomHpGlobalCtx *_ctx, PomHpLocalCtx *_lctx, size_t _numHp ){
     _lctx->rlist = (PomStackCtx*) malloc( sizeof( PomStackCtx ) );
     pomStackInit( _lctx->rlist );
-    
+
     PomHpRec *newHps = (PomHpRec*) malloc( sizeof( PomHpRec ) * _numHp );
-    newHps[ 0 ].hazardPtr = NULL;
-    newHps[ 0 ].next = NULL;
+    atomic_init( &newHps[ 0 ].hazardPtr, NULL );
+    atomic_init( &newHps[ 0 ].next, NULL );
     for( int i = 1; i < _numHp; i++ ){
-        newHps[ i-1 ].hazardPtr = NULL;
-        newHps[ i-1 ].next = &newHps[ i ];
+        atomic_init( &newHps[ i-1 ].hazardPtr, NULL );
+        atomic_init( &newHps[ i-1 ].next, &newHps[ i ] );
     }
     // TODO - Make sure the new hazard pointers are set before proceeding
     //atomic_thread_fence( memory_order_release );
@@ -36,11 +37,11 @@ int pomHpThreadInit( PomHpGlobalCtx *_ctx, PomHpLocalCtx *_lctx, size_t _numHp )
     // TODO - for now we're assuming the global HPrec can't have nodes removed from it
     // so fix that at some point.
     // TODO - make the next-reads atomic
-    volatile PomHpRec *currNode;
+    PomHpRec * _Atomic currNode;
     PomHpRec *expNode = NULL;
     currNode = _ctx->hpHead;
     while( 1 ){
-        if( !currNode->next){
+        if( !currNode->next ){
             // If we think we're at the tail, try slot our nodes into it, provided it's still NULL
             if( atomic_compare_exchange_weak( &currNode->next, &expNode, newHps ) ){
                 // Tail was set
@@ -63,14 +64,13 @@ int pomHpScan( PomHpGlobalCtx *_ctx, PomHpLocalCtx *_lctx ){
     // Stage 1 - scan each thread's hazard pointers and add non-null values to local list
     PomLinkedListCtx *plist = (PomLinkedListCtx*) malloc( sizeof( PomLinkedListCtx ) );
     pomLinkedListInit( plist );
-    volatile PomHpRec *hpRec = _ctx->hpHead;
+    PomHpRec * hpRec = atomic_load( &_ctx->hpHead );
     while( hpRec ){
-        // TODO - atomic read here
-        void * ptr = hpRec->hazardPtr;
+        void * ptr = atomic_load( &hpRec->hazardPtr );
         if( ptr ){
             pomLinkedListAdd( plist, (PllKeyType) ptr );
         }
-        hpRec = hpRec->next;
+        hpRec = atomic_load( &hpRec->next );
     }
 
     // Stage 2 - check plist for the nodes we're trying to retire
@@ -122,7 +122,7 @@ int pomHpSetHazard( PomHpLocalCtx *_lctx, void* _ptr, size_t idx ){
 
     PomHpRec *hpRecord = _lctx->hp + idx;
     // TODO atomically set this pointer
-    hpRecord->hazardPtr = _ptr;
+    atomic_store( &hpRecord->hazardPtr, _ptr );
     return 0;
 }
 
