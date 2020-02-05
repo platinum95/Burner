@@ -3,6 +3,8 @@
 
 #include <stddef.h>
 #include "hazard_ptr.h"
+#include <stdint.h>
+
 
 typedef struct PomQueueNode PomQueueNode;
 typedef struct PomQueueCtx PomQueueCtx;
@@ -15,6 +17,7 @@ struct PomQueueNode {
 struct PomQueueCtx{
     PomQueueNode * _Atomic head;
     PomQueueNode * _Atomic tail;
+    _Atomic uint32_t queueLength;
 };
 
 // Initialise the thread-safe queue
@@ -28,5 +31,7 @@ void * pomQueuePop( PomQueueCtx *_ctx, PomHpGlobalCtx *_hpctx, PomHpLocalCtx *_h
 
 // Clean up the queue
 int pomQueueClear( PomQueueCtx *_ctx );
+
+uint32_t pomQueueLength( PomQueueCtx *_ctx );
 
 #endif // QUEUE_H

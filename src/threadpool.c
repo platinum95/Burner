@@ -78,7 +78,7 @@ int threadHouse( void *_arg ){
     PomThreadpoolThreadCtx *tctx = arg->tctx;
     free( _arg );
 
-    while( atomic_load( &tctx->shouldLive ) ){
+    while( atomic_load( &tctx->shouldLive ) || pomQueueLength( ctx->jobQueue ) ){
         PomThreadpoolJob *job = pomQueuePop( ctx->jobQueue, ctx->hpgctx, tctx->hplctx );
         if( job ){
             atomic_store( &tctx->busy, true );
@@ -87,12 +87,13 @@ int threadHouse( void *_arg ){
 
             atomic_store( &tctx->busy, false );
         }
-
-        // TODO - implement a proper thread-sleep method (i.e. condition to wake on scheduleJob )
-        struct timespec tsleep;
-        tsleep.tv_sec = 0;
-        tsleep.tv_nsec = 100;
-        thrd_sleep( &tsleep, NULL );
+        if( pomQueueLength( ctx->jobQueue ) == 0 ){
+            // TODO - implement a proper thread-sleep method (i.e. condition to wake on scheduleJob )
+            struct timespec tsleep;
+            tsleep.tv_sec = 0;
+            tsleep.tv_nsec = 100;
+            thrd_sleep( &tsleep, NULL );
+        }
     }
     atomic_store( &tctx->isLive, false );
     return 0;

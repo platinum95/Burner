@@ -93,13 +93,13 @@ void testThreadFunc( void* _data ){
 }
 
 void testThreadpool(){
-    const int numIter = 1000;
+    const int numIter = 1e7;
     _Atomic int var = 0;
     //int var = 0;
     PomThreadpoolCtx *ctx = (PomThreadpoolCtx*) malloc( sizeof( PomThreadpoolCtx ) );
     pomThreadpoolInit( ctx, 4 );
     for( int i = 0; i < numIter; i++ ){
-        LOG( "Start thread %u", i );
+    //    LOG( "Start thread %u", i );
         pomThreadpoolScheduleJob( ctx, testThreadFunc, &var );
     }
     pomThreadpoolJoinAll( ctx );

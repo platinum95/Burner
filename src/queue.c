@@ -6,6 +6,7 @@ int pomQueueInit( PomQueueCtx *_ctx, size_t _dataLen ){
     PomQueueNode * dummyNode = (PomQueueNode*) malloc( sizeof( PomQueueNode ) );
     _ctx->head = dummyNode;
     _ctx->tail = dummyNode;
+    atomic_init( &_ctx->queueLength, 0 );
     return 0;
     //_ctx->dataLen = _dataLen;
 }
@@ -39,6 +40,7 @@ int pomQueuePush( PomQueueCtx *_ctx, PomHpLocalCtx *_hplctx, void * _data ){
     }
     atomic_compare_exchange_strong( &_ctx->tail, &tail, newNode );
     pomHpSetHazard( _hplctx, NULL, 0 );
+    atomic_fetch_add( &_ctx->queueLength, 1 );
     return 0;
 }
 
@@ -73,9 +75,13 @@ void * pomQueuePop( PomQueueCtx *_ctx, PomHpGlobalCtx *_hpctx, PomHpLocalCtx *_h
     pomHpSetHazard( _hplctx, NULL, 0 );
     pomHpSetHazard( _hplctx, NULL, 1 );
     pomHpRetireNode( _hpctx, _hplctx, head );
+    atomic_fetch_add( &_ctx->queueLength, -1 );
     return data;
 }
 
+uint32_t pomQueueLength( PomQueueCtx *_ctx ){
+    return atomic_load( &_ctx->queueLength );
+}
 
 int pomQueueClear( PomQueueCtx *_ctx ){
     // TODO - add clearing code
