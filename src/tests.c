@@ -87,15 +87,28 @@ void testQueues(){
 
 void testThreadFunc( void* _data ){
     _Atomic int *var = (_Atomic int *) _data;
-    (*var)++;
+    atomic_fetch_add( var, 1 );
+    //int *var  = (int*) _data;
+    //(*var)++;
 }
+
 void testThreadpool(){
+    const int numIter = 1000;
     _Atomic int var = 0;
+    //int var = 0;
     PomThreadpoolCtx *ctx = (PomThreadpoolCtx*) malloc( sizeof( PomThreadpoolCtx ) );
     pomThreadpoolInit( ctx, 4 );
-    for( int i = 0; i < 10000; i++ ){
+    for( int i = 0; i < numIter; i++ ){
+        LOG( "Start thread %u", i );
         pomThreadpoolScheduleJob( ctx, testThreadFunc, &var );
     }
-
+    pomThreadpoolJoinAll( ctx );
+    int newVar = atomic_load( &var );
+    if( atomic_load( &var ) != numIter ){
+        LOG( "Thread test failed, var = %u, iter = %u", newVar, numIter );
+    }
+    else{
+        LOG( "Thread test succeeded" );
+    }
 }
 

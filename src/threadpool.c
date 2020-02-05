@@ -9,7 +9,7 @@
 struct PomThreadpoolThreadCtx{
     uint16_t tId;
     _Atomic bool busy;
-    _Atomic bool live;
+    _Atomic bool shouldLive, isLive;
     PomHpLocalCtx *hplctx;
     thrd_t *tCtx;
     
@@ -35,13 +35,14 @@ int pomThreadpoolInit( PomThreadpoolCtx *_ctx, uint16_t _numThreads ){
     _ctx->threadData = (PomThreadpoolThreadCtx*) malloc( sizeof( PomThreadpoolThreadCtx ) * ( _numThreads + 1 ) );
     _ctx->jobQueue = (PomQueueCtx*) malloc( sizeof( PomQueueCtx ) );
     pomQueueInit( _ctx->jobQueue, sizeof( PomThreadpoolJob ) );
+    _ctx->hpgctx = (PomHpGlobalCtx*) malloc( sizeof( PomHpGlobalCtx ) );
     pomHpGlobalInit( _ctx->hpgctx );
     for( int tId = 0; tId < _numThreads+1; tId++ ){
         PomThreadpoolThreadCtx * currThread = &_ctx->threadData[ tId ];
         currThread->hplctx = (PomHpLocalCtx*) malloc( sizeof( PomHpLocalCtx ) );
         pomHpThreadInit( _ctx->hpgctx, currThread->hplctx, 2 );
         atomic_init( &currThread->busy, false );
-        atomic_init( &currThread->live, true );
+        atomic_init( &currThread->shouldLive, true );
         currThread->tId = tId;
         currThread->tCtx = (thrd_t*) malloc( sizeof( thrd_t ) );
         PomThreadHouseArg * hArg = (PomThreadHouseArg*) malloc( sizeof( PomThreadHouseArg ) );
@@ -71,12 +72,13 @@ int threadHouse( void *_arg ){
     PomThreadHouseArg * arg = (PomThreadHouseArg*) _arg;
     // Show we're busy while we set up
     atomic_store( &arg->tctx->busy, true );
+    atomic_init( &arg->tctx->isLive, true );
 
     PomThreadpoolCtx *ctx = arg->ctx;
     PomThreadpoolThreadCtx *tctx = arg->tctx;
     free( _arg );
 
-    while( atomic_load( &tctx->live ) ){
+    while( atomic_load( &tctx->shouldLive ) ){
         PomThreadpoolJob *job = pomQueuePop( ctx->jobQueue, ctx->hpgctx, tctx->hplctx );
         if( job ){
             atomic_store( &tctx->busy, true );
@@ -92,11 +94,25 @@ int threadHouse( void *_arg ){
         tsleep.tv_nsec = 100;
         thrd_sleep( &tsleep, NULL );
     }
+    atomic_store( &tctx->isLive, false );
     return 0;
 }
 
 
 int pomThreadpoolJoinAll( PomThreadpoolCtx *_ctx ){
     // TODO - implement
+    for( int i = 0; i < _ctx->numThreads; i++ ){
+        int tId = i + 1;
+        PomThreadpoolThreadCtx * currThread = &_ctx->threadData[ tId ];
+        atomic_store( &currThread->shouldLive, false );
+        thrd_join( *currThread->tCtx, NULL );
+    }
+
+    for( int i = 0; i < _ctx->numThreads; i++ ){
+        int tId = i + 1;
+        PomThreadpoolThreadCtx * currThread = &_ctx->threadData[ tId ];
+        while( atomic_load( &currThread->isLive ) );
+    }
+
     return 0;
 }
