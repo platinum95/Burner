@@ -1,3 +1,6 @@
+#ifndef HAZARD_PTR_H
+#define HAZARD_PTR_H
+
 #include <stdatomic.h>
 #include <stddef.h>
 #include "stack.h"
@@ -30,3 +33,5 @@ int pomHpRetireNode( PomHpGlobalCtx *_ctx, PomHpLocalCtx *_lctx, void *_node );
 
 // Set a hazard pointer in the thread-local list
 int pomHpSetHazard( PomHpLocalCtx *_lctx, void* _ptr, size_t idx );
+
+#endif

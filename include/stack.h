@@ -1,3 +1,5 @@
+#ifndef STACK_H
+#define STACK_H
 /*
 Simple non-contiguous stack implementation.
 Node memory is handled by module (except for popAll).
@@ -34,3 +36,5 @@ int pomStackPush( PomStackCtx *_ctx, void * _data );
 
 // Push many nodes onto the stack (must be null terminated)
 int pomStackPushMany( PomStackCtx *_ctx, PomStackNode * _nodes );
+
+#endif // STACK_H

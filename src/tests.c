@@ -5,6 +5,7 @@
 #include "tests.h"
 #include "queue.h"
 #include <stdlib.h>
+#include "threadpool.h"
 
 // Allow default config path to be overruled by compile option
 #ifndef DEFAULT_CONFIG_PATH
@@ -16,11 +17,13 @@
 void testHashmap();
 void testConfig();
 void testQueues();
+void testThreadpool();
 
 int testModules(){
 //    testHashmap();
 //    testConfig();
     testQueues();
+    testThreadpool();
     return 0;
 }
 
@@ -80,5 +83,19 @@ void testQueues(){
     else{
         LOG( "Queue popped same value as was pushed" );
     }
+}
+
+void testThreadFunc( void* _data ){
+    _Atomic int *var = (_Atomic int *) _data;
+    (*var)++;
+}
+void testThreadpool(){
+    _Atomic int var = 0;
+    PomThreadpoolCtx *ctx = (PomThreadpoolCtx*) malloc( sizeof( PomThreadpoolCtx ) );
+    pomThreadpoolInit( ctx, 4 );
+    for( int i = 0; i < 10000; i++ ){
+        pomThreadpoolScheduleJob( ctx, testThreadFunc, &var );
+    }
+
 }
 

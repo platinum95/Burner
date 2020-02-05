@@ -1,3 +1,6 @@
+#ifndef QUEUE_H
+#define QUEUE_H
+
 #include <stddef.h>
 #include "hazard_ptr.h"
 
@@ -25,3 +28,5 @@ void * pomQueuePop( PomQueueCtx *_ctx, PomHpGlobalCtx *_hpctx, PomHpLocalCtx *_h
 
 // Clean up the queue
 int pomQueueClear( PomQueueCtx *_ctx );
+
+#endif // QUEUE_H

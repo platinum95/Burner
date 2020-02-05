@@ -1,3 +1,6 @@
+#ifndef LINKEDLIST_H
+#define LINKEDLIST_H
+
 #include <stddef.h>
 #include <stdint.h>
 
@@ -26,3 +29,5 @@ int pomLinkedListClear( PomLinkedListCtx *_ctx );
 int pomLinkedListAdd( PomLinkedListCtx *_ctx, PllKeyType key );
 
 PomLinkedListNode * pomLinkedListFind( PomLinkedListCtx *_ctx, PllKeyType _key );
+
+#endif //LINKEDLIST_H
