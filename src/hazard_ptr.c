@@ -30,6 +30,7 @@ int pomHpThreadInit( PomHpGlobalCtx *_ctx, PomHpLocalCtx *_lctx, size_t _numHp )
         atomic_init( &newHps[ i-1 ].hazardPtr, NULL );
         atomic_init( &newHps[ i-1 ].next, &newHps[ i ] );
     }
+    _lctx->hp = newHps;
     // TODO - Make sure the new hazard pointers are set before proceeding
     //atomic_thread_fence( memory_order_release );
 
@@ -57,6 +58,35 @@ int pomHpThreadInit( PomHpGlobalCtx *_ctx, PomHpLocalCtx *_lctx, size_t _numHp )
             currNode = currNode->next;
         }
     }
+    return 0;
+}
+
+// Clear the thread-local hazard pointer data
+int pomHpThreadClear( PomHpLocalCtx *_lctx ){
+    // Iterate over the list and free any dangling retired nodes.
+    // Assume at this point that no pointers are hazards as other threads should be exited
+    // TODO - ensure theres no double-freeing (might not be a problem)
+    PomStackNode *retireNodes = pomStackPopAll( _lctx->rlist );
+    PomStackNode *currNode = retireNodes;
+    while( currNode ){
+        PomStackNode * nextNode = currNode->next;
+        //free( currNode->data );
+        free( currNode ); // Free the node (not the hazard pointer)
+        currNode = nextNode;
+    }
+
+    pomStackClear( _lctx->rlist);
+    free( _lctx->rlist );
+    free( _lctx->hp );
+
+    return 0;
+}
+
+// Clear the global hazard pointer data
+int pomHpGlobalClear( PomHpGlobalCtx *_ctx ){
+    
+    // Just need to free the dummy node at the head of the list
+    free( _ctx->hpHead );
     return 0;
 }
 
@@ -88,7 +118,7 @@ int pomHpScan( PomHpGlobalCtx *_ctx, PomHpLocalCtx *_lctx ){
         }else{
             // Can now release/reuse the retired pointer
             // TODO - handle the pointer release here
-            free( currNode->data );
+           // free( currNode->data );
             free( currNode ); // Free the node (not the hazard pointer)
         }
         currNode = nextNode;
@@ -103,7 +133,6 @@ int pomHpScan( PomHpGlobalCtx *_ctx, PomHpLocalCtx *_lctx ){
 
 int pomHpRetireNode( PomHpGlobalCtx *_ctx, PomHpLocalCtx *_lctx, void *_ptr ){
     // Push the node onto the thread-local list
-    // TODO - fix this awful code, i.e. implement a proper sorted linked list module
     
     pomStackPush( _lctx->rlist, _ptr );
     _lctx->rcount++;

@@ -34,4 +34,10 @@ int pomHpRetireNode( PomHpGlobalCtx *_ctx, PomHpLocalCtx *_lctx, void *_node );
 // Set a hazard pointer in the thread-local list
 int pomHpSetHazard( PomHpLocalCtx *_lctx, void* _ptr, size_t idx );
 
+// Clear the thread-local hazard pointer data
+int pomHpThreadClear( PomHpLocalCtx *_lctx );
+
+// Clear the global hazard pointer data
+int pomHpGlobalClear( PomHpGlobalCtx *_ctx );
+
 #endif

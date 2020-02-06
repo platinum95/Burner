@@ -10,7 +10,13 @@ int pomLinkedListInit( PomLinkedListCtx *_ctx ){
 }
 
 int pomLinkedListClear( PomLinkedListCtx *_ctx ){
-    // TODO - implement
+    // Iterate over the list, clearing nodes as we go
+    PomLinkedListNode *cNode = _ctx->head;
+    while( cNode ){
+        PomLinkedListNode *nNode = cNode->next;
+        free( cNode );
+        cNode = nNode;
+    }
     return 0;
 }
 

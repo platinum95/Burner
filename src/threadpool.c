@@ -54,10 +54,7 @@ int pomThreadpoolInit( PomThreadpoolCtx *_ctx, uint16_t _numThreads ){
     return 0;
 }
 
-int pomThreadpoolClear( PomThreadpoolCtx *_ctx ){
-    // TODO - Implement this
-    return 0;
-}
+
 
 int pomThreadpoolScheduleJob( PomThreadpoolCtx *_ctx, void(*_func)(void*), void *_args ){
     PomThreadpoolJob *jobData = (PomThreadpoolJob*) malloc( sizeof( PomThreadpoolJob ) );
@@ -87,6 +84,7 @@ int threadHouse( void *_arg ){
 
             atomic_store( &tctx->busy, false );
         }
+        free( job );
         if( pomQueueLength( ctx->jobQueue ) == 0 ){
             // TODO - implement a proper thread-sleep method (i.e. condition to wake on scheduleJob )
             struct timespec tsleep;
@@ -101,19 +99,50 @@ int threadHouse( void *_arg ){
 
 
 int pomThreadpoolJoinAll( PomThreadpoolCtx *_ctx ){
-    // TODO - implement
+    // Wait for the queue to clear.
+    while( pomQueueLength( _ctx->jobQueue ) );
+    return 0;
+}
+
+
+int pomThreadpoolClear( PomThreadpoolCtx *_ctx ){
+    // Tell all threads to exit
     for( int i = 0; i < _ctx->numThreads; i++ ){
         int tId = i + 1;
         PomThreadpoolThreadCtx * currThread = &_ctx->threadData[ tId ];
         atomic_store( &currThread->shouldLive, false );
-        thrd_join( *currThread->tCtx, NULL );
     }
 
+    // Wait for all the threads to exit
     for( int i = 0; i < _ctx->numThreads; i++ ){
         int tId = i + 1;
         PomThreadpoolThreadCtx * currThread = &_ctx->threadData[ tId ];
         while( atomic_load( &currThread->isLive ) );
+        thrd_join( *currThread->tCtx, NULL );
+        free( currThread->tCtx );
+        pomHpThreadClear( currThread->hplctx );
+        free( currThread->hplctx );
     }
+    // Now that all threads are gone, free the local hazard pointer data
+    for( int i = 0; i < _ctx->numThreads; i++ ){
+        int tId = i + 1;
+        PomThreadpoolThreadCtx * currThread = &_ctx->threadData[ tId ];
+        pomHpThreadClear( currThread->hplctx );
+        free( currThread->hplctx );
+    }
+    PomThreadpoolThreadCtx *mCtx = &_ctx->threadData[ 0 ];
+    // Clear main thread's hazard pointer data
+    pomHpThreadClear( mCtx->hplctx );
+    free( mCtx->hplctx );
+
+    // Clear global hazard pointer and queue data
+    pomHpGlobalClear( _ctx->hpgctx );
+    pomQueueClear( _ctx->jobQueue );
+
+    // Free threadpool pointers
+    free( _ctx->hpgctx );
+    free( _ctx->jobQueue );
+    free( _ctx->threadData );
 
     return 0;
 }

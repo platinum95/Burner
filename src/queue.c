@@ -61,6 +61,8 @@ void * pomQueuePop( PomQueueCtx *_ctx, PomHpGlobalCtx *_hpctx, PomHpLocalCtx *_h
         }
         if( !next ){
             // Empty queue
+            pomHpSetHazard( _hplctx, NULL, 0 );
+            pomHpSetHazard( _hplctx, NULL, 1 );
             return NULL;
         }
         if( head == tail ){
@@ -84,6 +86,20 @@ uint32_t pomQueueLength( PomQueueCtx *_ctx ){
 }
 
 int pomQueueClear( PomQueueCtx *_ctx ){
-    // TODO - add clearing code
+    // Assume at this point that no other threads are going to continue adding/removing stuff
+    if( atomic_load( &_ctx->queueLength ) ){
+        // Clear any remaining items.
+        // Unfreed data is lost (responsibility of queue owner to free them before calling this)
+        PomQueueNode * qNode = _ctx->head;
+        while( qNode ){
+            PomQueueNode *nNode = qNode->next;
+            free( qNode );
+            qNode = nNode;
+        }
+    }
+    // Any retired nodes should be freed by the hazard pointer handler
+
+    // Now clear the dummy head node
+    free( _ctx->head );
     return 0;
 }

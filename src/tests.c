@@ -110,5 +110,7 @@ void testThreadpool(){
     else{
         LOG( "Thread test succeeded" );
     }
+
+    pomThreadpoolClear( ctx );
 }
 
