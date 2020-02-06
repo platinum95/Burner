@@ -93,7 +93,7 @@ void testThreadFunc( void* _data ){
 }
 
 void testThreadpool(){
-    const int numIter = 1e7;
+    const int numIter = 1e3;
     _Atomic int var = 0;
     //int var = 0;
     PomThreadpoolCtx *ctx = (PomThreadpoolCtx*) malloc( sizeof( PomThreadpoolCtx ) );

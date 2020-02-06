@@ -22,6 +22,7 @@ int pomHpGlobalInit( PomHpGlobalCtx *_ctx ){
 int pomHpThreadInit( PomHpGlobalCtx *_ctx, PomHpLocalCtx *_lctx, size_t _numHp ){
     _lctx->rlist = (PomStackCtx*) malloc( sizeof( PomStackCtx ) );
     pomStackInit( _lctx->rlist );
+    _lctx->numHp = _numHp;
 
     PomHpRec *newHps = (PomHpRec*) malloc( sizeof( PomHpRec ) * _numHp );
     atomic_init( &newHps[ 0 ].hazardPtr, NULL );
@@ -148,7 +149,6 @@ int pomHpSetHazard( PomHpLocalCtx *_lctx, void* _ptr, size_t idx ){
         // Invalid HP index
         return 1;
     }
-
     PomHpRec *hpRecord = _lctx->hp + idx;
     // TODO atomically set this pointer
     atomic_store( &hpRecord->hazardPtr, _ptr );
