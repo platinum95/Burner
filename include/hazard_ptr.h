@@ -13,6 +13,7 @@ struct PomHpGlobalCtx{
     PomHpRec * _Atomic hpHead; // Atomic pointer to a hp record
     _Atomic size_t rNodeThreshold;
     PomStackTsCtx * releasedPtrs;
+    _Atomic int allocCntr, freeCntr;
 };
 
 struct PomHpLocalCtx{
@@ -21,7 +22,6 @@ struct PomHpLocalCtx{
     // Need some list type here, doesn't need to be type-safe
     PomStackCtx *rlist;
     size_t rcount;
-    _Atomic int allocCntr, freeCntr;
 };
 
 // Initialise the hazard pointer handler (call once per process)

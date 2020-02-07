@@ -8,6 +8,14 @@
 typedef struct PomThreadpoolCtx PomThreadpoolCtx;
 typedef struct PomThreadpoolThreadCtx PomThreadpoolThreadCtx;
 
+typedef struct PomThreadpoolJob PomThreadpoolJob;
+
+struct PomThreadpoolJob{
+    void (*func)(void*);
+    void *args;
+};
+
+
 struct PomThreadpoolCtx{
     uint16_t numThreads;
     PomQueueCtx * _Atomic jobQueue;
@@ -24,6 +32,6 @@ int pomThreadpoolJoinAll( PomThreadpoolCtx *_ctx );
 
 int pomThreadpoolClear( PomThreadpoolCtx *_ctx );
 
-int pomThreadpoolScheduleJob( PomThreadpoolCtx *_ctx, void(*func)(void*), void *_args );
+int pomThreadpoolScheduleJob( PomThreadpoolCtx *_ctx, PomThreadpoolJob *_job );
 
 #endif // THREADPOOL_H

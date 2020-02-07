@@ -93,14 +93,19 @@ void testThreadFunc( void* _data ){
 }
 
 void testThreadpool(){
-    const int numIter = 1e3;
+    // allocs (at worst) = 31 + (numIter * 4)
+    const int numIter = 1;
     _Atomic int var = 0;
     //int var = 0;
     PomThreadpoolCtx *ctx = (PomThreadpoolCtx*) malloc( sizeof( PomThreadpoolCtx ) );
     pomThreadpoolInit( ctx, 4 );
+    PomThreadpoolJob job;
+    job.func = testThreadFunc;
+    job.args = &var;
     for( int i = 0; i < numIter; i++ ){
     //    LOG( "Start thread %u", i );
-        pomThreadpoolScheduleJob( ctx, testThreadFunc, &var );
+        pomThreadpoolScheduleJob( ctx, &job );
+    //    thrd_sleep( &(struct timespec){.tv_sec=0, .tv_nsec=100}, NULL );
     }
     pomThreadpoolJoinAll( ctx );
     int newVar = atomic_load( &var );

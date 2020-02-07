@@ -65,6 +65,9 @@ void * pomStackTsPop( PomStackTsCtx *_ctx );
 // Pop many items off the stack. Caller assumes responsibility for freeing the node memory
 int pomStackTsPopMany( PomStackTsCtx *_ctx, PomStackNode ** _nodes, int _numNodes );
 
+// Cull the stack to a certain size. Caller assumes responsibility for freeing the node memory
+int pomStackTsCull( PomStackTsCtx *_ctx, PomStackNode ** _nodes, int _numNodes );
+
 // Push a single item onto the stack
 int pomStackTsPush( PomStackTsCtx *_ctx, void * _data );
 

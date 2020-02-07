@@ -8,6 +8,7 @@
 PomQueueNode *pomQueueRequestNode( PomHpGlobalCtx *_hpgctx ){
     PomQueueNode *node = (PomQueueNode*) pomHpRequestNode( _hpgctx );
     if( !node ){
+         atomic_fetch_add( &_hpgctx->allocCntr, 1 );
          node = (PomQueueNode*) malloc( sizeof( PomQueueNode ) );
     }
     return node;
@@ -21,14 +22,19 @@ int pomQueueRetireNode( PomHpGlobalCtx *_hpgctx, PomHpLocalCtx *_hplctx, PomQueu
     // TODO - change this some_threshold stuff. Maybe increase it on each culling
     if( relStackSize > some_threshold ){
         // Cull the retired list down to free some space
-        int toCull = relStackSize - some_threshold;
         PomStackNode * nNodes;
-        int ret = pomStackTsPopMany( _hpgctx->releasedPtrs, &nNodes, toCull );
-        for( int i = 0; i < ret; i++ ){
-           // PomStackNode * currStackNode = &nNodes[ i ];
-           // PomQueueNode * currQNode = (PomQueueNode*) currStackNode->data;
-           // free( currQNode );
-           // free( currStackNode );
+        int ret = pomStackTsCull( _hpgctx->releasedPtrs, &nNodes, some_threshold / 2 );
+        if( ret == 0 ){
+            // Didn't pop any
+            return 0;
+        }
+        PomStackNode *currStackNode = nNodes;
+        while( currStackNode ){
+            PomQueueNode * currQNode = (PomQueueNode*) currStackNode->data;
+            free( currQNode );
+            free( currStackNode );
+            currStackNode = currStackNode->next;
+            atomic_fetch_add( &_hpgctx->freeCntr, 1 );
         }
     }
 
@@ -48,12 +54,11 @@ int pomQueueInit( PomQueueCtx *_ctx, size_t _dataLen ){
 }
 
 int pomQueuePush( PomQueueCtx *_ctx, PomHpGlobalCtx *_hpgctx, PomHpLocalCtx *_hplctx, void * _data ){
-    PomQueueNode *newNode = pomQueueRequestNode( _hpgctx );// (PomQueueNode*) malloc( sizeof( PomQueueNode ) );
+    PomQueueNode *newNode = pomQueueRequestNode( _hpgctx );
     PomQueueNode *nullNode = NULL;
     newNode->next = NULL;
     newNode->data = _data;
     PomQueueNode *tail;
-    atomic_fetch_add( &_hplctx->allocCntr, 1 );
     while( 1 ){
         tail = atomic_load( &_ctx->tail );
         // Ensure this is atomic
@@ -147,6 +152,7 @@ int pomQueueClear( PomQueueCtx *_ctx, PomHpGlobalCtx *_hpctx ){
     while( ( relStackNode = (PomQueueNode*) pomStackTsPop( _hpctx->releasedPtrs ) ) ){
         i++;
         free( relStackNode );
+        atomic_fetch_add( &_hpctx->freeCntr, 1 );
     }
     printf( "%i nodes in released list\n", i );
     return 0;

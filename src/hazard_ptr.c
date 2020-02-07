@@ -18,6 +18,10 @@ int pomHpGlobalInit( PomHpGlobalCtx *_ctx ){
     atomic_init( &_ctx->rNodeThreshold, 10 ); // TODO have a proper threshold
     _ctx->releasedPtrs = (PomStackTsCtx*) malloc( sizeof( PomStackTsCtx ) );
     pomStackTsInit( _ctx->releasedPtrs );
+
+    atomic_init( &_ctx->allocCntr, 0 );
+    atomic_init( &_ctx->freeCntr, 0 );
+
     return 0;
 }
 
@@ -42,8 +46,6 @@ int pomHpThreadInit( PomHpGlobalCtx *_ctx, PomHpLocalCtx *_lctx, size_t _numHp )
     pomStackInit( _lctx->rlist );
     _lctx->numHp = _numHp;
     _lctx->rcount = 0;
-    atomic_init( &_lctx->allocCntr, 0 );
-    atomic_init( &_lctx->freeCntr, 0 );
 
     // Try to emplace the new hazard pointers onto the list
     // TODO - for now we're assuming the global HPrec can't have nodes removed from it
@@ -83,10 +85,9 @@ int pomHpThreadClear( PomHpGlobalCtx *_ctx, PomHpLocalCtx *_lctx ){
     while( currNode ){
         PomStackNode * nextNode = currNode->next;
         // Free the stack node and the queue node hazard pointer)
-        pomStackTsPush( _ctx->releasedPtrs, currNode->data );
-        free( currNode );
+        currNode->next = NULL;
+        pomStackTsPushMany( _ctx->releasedPtrs, currNode );
         currNode = nextNode;
-        atomic_fetch_add( &_lctx->freeCntr, 1 );
     }
 
     pomStackClear( _lctx->rlist);
@@ -142,7 +143,6 @@ int pomHpScan( PomHpGlobalCtx *_ctx, PomHpLocalCtx *_lctx ){
             // Can now release/reuse the retired pointer
             pomStackTsPush( _ctx->releasedPtrs, currNode->data );
             free( currNode ); // Free the node (not the hazard pointer)
-            atomic_fetch_add( &_lctx->freeCntr, 1 );
         }
         currNode = nextNode;
     }

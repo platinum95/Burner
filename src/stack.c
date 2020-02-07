@@ -143,20 +143,51 @@ int pomStackTsPopMany( PomStackTsCtx *_ctx, PomStackNode ** _nodes, int _numNode
     return nCount;
 }
 
+int pomStackTsCull( PomStackTsCtx *_ctx, PomStackNode ** _nodes, int _numNodes ){
+    mtx_lock( &_ctx->mtx );
+    if( _numNodes <= _ctx->stackSize ){
+        mtx_unlock( &_ctx->mtx );
+        return 0;
+    }
+    int toCull = _ctx->stackSize - _numNodes;
+    // Cycle to end of list and set it to the current head
+    PomStackNode *head = _ctx->head;
+    PomStackNode *curNode = _ctx->head;
+    if( !curNode ){
+        _nodes = NULL;
+        mtx_unlock( &_ctx->mtx );
+        return 0;
+    }
+
+    int nCount = 1;
+    while( curNode->next && nCount < toCull ){
+        nCount++;
+        curNode = curNode->next;
+    }
+    
+    _ctx->head = curNode->next;
+    
+    *_nodes = head;
+
+    mtx_unlock( &_ctx->mtx );
+    return nCount;
+}
+
 // Push many nodes onto the stack (must be null terminated)
 int pomStackTsPushMany( PomStackTsCtx *_ctx, PomStackNode * _nodes ){
     mtx_lock( &_ctx->mtx );
     // Cycle to end of list and set it to the current head
-    PomStackNode *curNode = _ctx->head;
-    if( curNode ){
+    PomStackNode **curNode = &_nodes;
+    if( *curNode ){
         _ctx->stackSize++;
-        while( curNode->next ){
+        while( (*curNode)->next ){
             _ctx->stackSize++;
-            curNode = curNode->next;
+            curNode = &(*curNode)->next;
         }
-    } 
-    curNode->next = _ctx->head;
-    _ctx->head = curNode;
+    }
+
+    (*curNode)->next = _ctx->head;
+    _ctx->head = _nodes;
 
     mtx_unlock( &_ctx->mtx );
 

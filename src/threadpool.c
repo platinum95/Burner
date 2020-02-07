@@ -12,13 +12,6 @@ struct PomThreadpoolThreadCtx{
     thrd_t tCtx;
 };
 
-typedef struct PomThreadpoolJob PomThreadpoolJob;
-
-struct PomThreadpoolJob{
-    void (*func)(void*);
-    void *args;
-};
-
 typedef struct PomThreadHouseArg{
     PomThreadpoolCtx * ctx;
     PomThreadpoolThreadCtx *tctx;
@@ -57,11 +50,8 @@ int pomThreadpoolInit( PomThreadpoolCtx *_ctx, uint16_t _numThreads ){
     return 0;
 }
 
-int pomThreadpoolScheduleJob( PomThreadpoolCtx *_ctx, void(*_func)(void*), void *_args ){
-    PomThreadpoolJob *jobData = (PomThreadpoolJob*) malloc( sizeof( PomThreadpoolJob ) );
-    jobData->func = _func;
-    jobData->args = _args;
-    pomQueuePush( atomic_load( &_ctx->jobQueue ), _ctx->hpgctx, _ctx->threadData[ 0 ].hplctx, jobData );
+int pomThreadpoolScheduleJob( PomThreadpoolCtx *_ctx, PomThreadpoolJob *_job ){
+    pomQueuePush( atomic_load( &_ctx->jobQueue ), _ctx->hpgctx, _ctx->threadData[ 0 ].hplctx, _job );
     cnd_signal( &_ctx->tWaitCond );
     return 0;
 }
@@ -95,7 +85,6 @@ int threadHouse( void *_arg ){
             // We have a job to execute
             job->func( job->args );
             atomic_store( &tctx->busy, false );
-            free( job );
         }
 
 
@@ -144,15 +133,13 @@ int pomThreadpoolClear( PomThreadpoolCtx *_ctx ){
     PomThreadpoolThreadCtx *headThread = &_ctx->threadData[ 0 ];
     pomHpThreadClear( _ctx->hpgctx, headThread->hplctx );
     
-
-    freeCnt += atomic_load( &headThread->hplctx->freeCntr );
-    allocCnt += atomic_load( &headThread->hplctx->allocCntr );
-    printf( "Thread %i: alloc %i, free %i\n", 0, allocCnt, freeCnt );
     free( headThread->hplctx );
     // Wait for all the threads to exit, then free their data
     for( int i = startIdx; i < _ctx->numThreads; i++ ){
         int tId = i + 1;
         PomThreadpoolThreadCtx * currThread = &_ctx->threadData[ tId ];
+        // TODO - Verify there's no error here. Valgrind gave an free'd-block access error
+        // on this atomic_load
         while( atomic_load( &currThread->isLive ) ){
             // Keep broadcasting on the offchance the thread is
             // stuck waiting
@@ -163,20 +150,20 @@ int pomThreadpoolClear( PomThreadpoolCtx *_ctx ){
 
         // Free the thread data
         pomHpThreadClear( _ctx->hpgctx, currThread->hplctx );
-        int tAlloc = atomic_load( &currThread->hplctx->allocCntr );
-        int tFree = atomic_load( &currThread->hplctx->freeCntr );
 
-        freeCnt += tFree;
-        allocCnt += tAlloc;
-        printf( "Thread %i: alloc %i, free %i\n", tId, tAlloc, tFree );
         free( currThread->hplctx );
     }
 
-    printf( "Allocated %i, freed %i\n", allocCnt, freeCnt );
+    
 
     // Clear global hazard pointer and queue data
     pomQueueClear( _ctx->jobQueue, _ctx->hpgctx );
     pomHpGlobalClear( _ctx->hpgctx );
+
+    freeCnt = atomic_load( &_ctx->hpgctx->freeCntr );
+    allocCnt = atomic_load( &_ctx->hpgctx->allocCntr );
+
+    printf( "Allocated %i, freed %i\n", allocCnt, freeCnt );
 
     // Free threadpool pointers
     free( _ctx->hpgctx );
