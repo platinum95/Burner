@@ -1,9 +1,45 @@
 #include "queue.h"
 #include <stdatomic.h>
 #include <stdlib.h>
+#include <stdio.h>
+
+#define some_threshold 20
+
+PomQueueNode *pomQueueRequestNode( PomHpGlobalCtx *_hpgctx ){
+    PomQueueNode *node = (PomQueueNode*) pomHpRequestNode( _hpgctx );
+    if( !node ){
+         node = (PomQueueNode*) malloc( sizeof( PomQueueNode ) );
+    }
+    return node;
+}
+
+int pomQueueRetireNode( PomHpGlobalCtx *_hpgctx, PomHpLocalCtx *_hplctx, PomQueueNode *_node ){
+    
+    pomHpRetireNode( _hpgctx, _hplctx, _node );
+
+    int relStackSize = _hpgctx->releasedPtrs->stackSize;
+    // TODO - change this some_threshold stuff. Maybe increase it on each culling
+    if( relStackSize > some_threshold ){
+        // Cull the retired list down to free some space
+        int toCull = relStackSize - some_threshold;
+        PomStackNode * nNodes;
+        int ret = pomStackTsPopMany( _hpgctx->releasedPtrs, &nNodes, toCull );
+        for( int i = 0; i < ret; i++ ){
+           // PomStackNode * currStackNode = &nNodes[ i ];
+           // PomQueueNode * currQNode = (PomQueueNode*) currStackNode->data;
+           // free( currQNode );
+           // free( currStackNode );
+        }
+    }
+
+    return 0;
+}
+
 
 int pomQueueInit( PomQueueCtx *_ctx, size_t _dataLen ){
     PomQueueNode * dummyNode = (PomQueueNode*) malloc( sizeof( PomQueueNode ) );
+    dummyNode->data = NULL;
+    atomic_init( &dummyNode->next, NULL );
     _ctx->head = dummyNode;
     _ctx->tail = dummyNode;
     atomic_init( &_ctx->queueLength, 0 );
@@ -11,12 +47,13 @@ int pomQueueInit( PomQueueCtx *_ctx, size_t _dataLen ){
     //_ctx->dataLen = _dataLen;
 }
 
-int pomQueuePush( PomQueueCtx *_ctx, PomHpLocalCtx *_hplctx, void * _data ){
-    PomQueueNode *newNode = (PomQueueNode*) malloc( sizeof( PomQueueNode ) );
+int pomQueuePush( PomQueueCtx *_ctx, PomHpGlobalCtx *_hpgctx, PomHpLocalCtx *_hplctx, void * _data ){
+    PomQueueNode *newNode = pomQueueRequestNode( _hpgctx );// (PomQueueNode*) malloc( sizeof( PomQueueNode ) );
     PomQueueNode *nullNode = NULL;
     newNode->next = NULL;
     newNode->data = _data;
     PomQueueNode *tail;
+    atomic_fetch_add( &_hplctx->allocCntr, 1 );
     while( 1 ){
         tail = atomic_load( &_ctx->tail );
         // Ensure this is atomic
@@ -76,7 +113,8 @@ void * pomQueuePop( PomQueueCtx *_ctx, PomHpGlobalCtx *_hpctx, PomHpLocalCtx *_h
     }
     pomHpSetHazard( _hplctx, NULL, 0 );
     pomHpSetHazard( _hplctx, NULL, 1 );
-    pomHpRetireNode( _hpctx, _hplctx, head );
+    pomQueueRetireNode( _hpctx, _hplctx, head );
+    //pomHpRetireNode( _hpctx, _hplctx, head );
     atomic_fetch_add( &_ctx->queueLength, -1 );
     return data;
 }
@@ -85,7 +123,9 @@ uint32_t pomQueueLength( PomQueueCtx *_ctx ){
     return atomic_load( &_ctx->queueLength );
 }
 
-int pomQueueClear( PomQueueCtx *_ctx ){
+#include <stdio.h>
+
+int pomQueueClear( PomQueueCtx *_ctx, PomHpGlobalCtx *_hpctx ){
     // Assume at this point that no other threads are going to continue adding/removing stuff
     if( atomic_load( &_ctx->queueLength ) ){
         // Clear any remaining items.
@@ -96,10 +136,18 @@ int pomQueueClear( PomQueueCtx *_ctx ){
             free( qNode );
             qNode = nNode;
         }
+    }else{
+        // Free the dummy node
+        free( _ctx->head );
     }
-    // Any retired nodes should be freed by the hazard pointer handler
 
-    // Now clear the dummy head node
-    free( _ctx->head );
+    // Now go through the hazard pointer's released list to free up remaining nodes
+    int i = 0;
+    PomQueueNode *relStackNode;
+    while( ( relStackNode = (PomQueueNode*) pomStackTsPop( _hpctx->releasedPtrs ) ) ){
+        i++;
+        free( relStackNode );
+    }
+    printf( "%i nodes in released list\n", i );
     return 0;
 }

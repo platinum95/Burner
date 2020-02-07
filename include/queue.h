@@ -24,13 +24,13 @@ struct PomQueueCtx{
 int pomQueueInit( PomQueueCtx *_ctx, size_t _dataLen );
 
 // Add an item to the queue
-int pomQueuePush( PomQueueCtx *_ctx, PomHpLocalCtx *_hplctx, void * _data );
+int pomQueuePush( PomQueueCtx *_ctx, PomHpGlobalCtx *_hpgctx, PomHpLocalCtx *_hplctx, void * _data );
 
 // Pop an item from the queue
 void * pomQueuePop( PomQueueCtx *_ctx, PomHpGlobalCtx *_hpctx, PomHpLocalCtx *_hplctx );
 
 // Clean up the queue
-int pomQueueClear( PomQueueCtx *_ctx );
+int pomQueueClear( PomQueueCtx *_ctx, PomHpGlobalCtx *_hpctx );
 
 uint32_t pomQueueLength( PomQueueCtx *_ctx );
 

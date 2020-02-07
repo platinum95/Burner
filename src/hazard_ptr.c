@@ -16,14 +16,14 @@ int pomHpGlobalInit( PomHpGlobalCtx *_ctx ){
     atomic_init( &_ctx->hpHead->next, NULL );
     atomic_init( &_ctx->hpHead->hazardPtr, NULL );
     atomic_init( &_ctx->rNodeThreshold, 10 ); // TODO have a proper threshold
+    _ctx->releasedPtrs = (PomStackTsCtx*) malloc( sizeof( PomStackTsCtx ) );
+    pomStackTsInit( _ctx->releasedPtrs );
     return 0;
 }
 
 int pomHpThreadInit( PomHpGlobalCtx *_ctx, PomHpLocalCtx *_lctx, size_t _numHp ){
-    _lctx->rlist = (PomStackCtx*) malloc( sizeof( PomStackCtx ) );
-    pomStackInit( _lctx->rlist );
-    _lctx->numHp = _numHp;
-
+    
+    // Create new HP records for this thread
     PomHpRec *newHps = (PomHpRec*) malloc( sizeof( PomHpRec ) * _numHp );
     atomic_init( &newHps[ 0 ].hazardPtr, NULL );
     atomic_init( &newHps[ 0 ].next, NULL );
@@ -31,9 +31,19 @@ int pomHpThreadInit( PomHpGlobalCtx *_ctx, PomHpLocalCtx *_lctx, size_t _numHp )
         atomic_init( &newHps[ i-1 ].hazardPtr, NULL );
         atomic_init( &newHps[ i-1 ].next, &newHps[ i ] );
     }
-    _lctx->hp = newHps;
+    atomic_init( &newHps[ _numHp - 1 ].hazardPtr, NULL );
+    atomic_init( &newHps[ _numHp - 1 ].next, NULL );
     // TODO - Make sure the new hazard pointers are set before proceeding
+    // (i.e. make sure this fence and the relaxed inits make sense)
     //atomic_thread_fence( memory_order_release );
+    //atomic_thread_fence( memory_order_seq_cst );
+    _lctx->hp = newHps;
+    _lctx->rlist = (PomStackCtx*) malloc( sizeof( PomStackCtx ) );
+    pomStackInit( _lctx->rlist );
+    _lctx->numHp = _numHp;
+    _lctx->rcount = 0;
+    atomic_init( &_lctx->allocCntr, 0 );
+    atomic_init( &_lctx->freeCntr, 0 );
 
     // Try to emplace the new hazard pointers onto the list
     // TODO - for now we're assuming the global HPrec can't have nodes removed from it
@@ -45,6 +55,7 @@ int pomHpThreadInit( PomHpGlobalCtx *_ctx, PomHpLocalCtx *_lctx, size_t _numHp )
     while( 1 ){
         if( !currNode->next ){
             // If we think we're at the tail, try slot our nodes into it, provided it's still NULL
+            // TODO - consider making this memory_order_release
             if( atomic_compare_exchange_weak( &currNode->next, &expNode, newHps ) ){
                 // Tail was set
                 break;
@@ -63,7 +74,7 @@ int pomHpThreadInit( PomHpGlobalCtx *_ctx, PomHpLocalCtx *_lctx, size_t _numHp )
 }
 
 // Clear the thread-local hazard pointer data
-int pomHpThreadClear( PomHpLocalCtx *_lctx ){
+int pomHpThreadClear( PomHpGlobalCtx *_ctx, PomHpLocalCtx *_lctx ){
     // Iterate over the list and free any dangling retired nodes.
     // Assume at this point that no pointers are hazards as other threads should be exited
     // TODO - ensure theres no double-freeing (might not be a problem)
@@ -71,9 +82,11 @@ int pomHpThreadClear( PomHpLocalCtx *_lctx ){
     PomStackNode *currNode = retireNodes;
     while( currNode ){
         PomStackNode * nextNode = currNode->next;
-        //free( currNode->data );
-        free( currNode ); // Free the node (not the hazard pointer)
+        // Free the stack node and the queue node hazard pointer)
+        pomStackTsPush( _ctx->releasedPtrs, currNode->data );
+        free( currNode );
         currNode = nextNode;
+        atomic_fetch_add( &_lctx->freeCntr, 1 );
     }
 
     pomStackClear( _lctx->rlist);
@@ -83,18 +96,27 @@ int pomHpThreadClear( PomHpLocalCtx *_lctx ){
     return 0;
 }
 
+void *pomHpRequestNode( PomHpGlobalCtx *_ctx ){
+    return pomStackTsPop( _ctx->releasedPtrs );
+}
+
 // Clear the global hazard pointer data
 int pomHpGlobalClear( PomHpGlobalCtx *_ctx ){
-    
+    pomStackTsClear( _ctx->releasedPtrs );
+    free( _ctx->releasedPtrs );
     // Just need to free the dummy node at the head of the list
     free( _ctx->hpHead );
     return 0;
 }
 
+
 int pomHpScan( PomHpGlobalCtx *_ctx, PomHpLocalCtx *_lctx ){
     // Stage 1 - scan each thread's hazard pointers and add non-null values to local list
     PomLinkedListCtx *plist = (PomLinkedListCtx*) malloc( sizeof( PomLinkedListCtx ) );
     pomLinkedListInit( plist );
+    // TODO - consider making the HpRec loads memory_order_acquire
+    // They're current seq_cst so hazardPtr should be loaded OK despite 
+    // being stored with mem_order_relaxed
     PomHpRec * hpRec = atomic_load( &_ctx->hpHead );
     while( hpRec ){
         void * ptr = atomic_load( &hpRec->hazardPtr );
@@ -118,9 +140,9 @@ int pomHpScan( PomHpGlobalCtx *_ctx, PomHpLocalCtx *_lctx ){
             _lctx->rcount++;
         }else{
             // Can now release/reuse the retired pointer
-            // TODO - handle the pointer release here
-           // free( currNode->data );
+            pomStackTsPush( _ctx->releasedPtrs, currNode->data );
             free( currNode ); // Free the node (not the hazard pointer)
+            atomic_fetch_add( &_lctx->freeCntr, 1 );
         }
         currNode = nextNode;
     }
@@ -138,7 +160,7 @@ int pomHpRetireNode( PomHpGlobalCtx *_ctx, PomHpLocalCtx *_lctx, void *_ptr ){
     pomStackPush( _lctx->rlist, _ptr );
     _lctx->rcount++;
 
-    if( _lctx->rcount > _ctx->rNodeThreshold ){
+    if( _lctx->rcount > atomic_load( &_ctx->rNodeThreshold ) ){
         pomHpScan( _ctx, _lctx );
     }
     return 0;
@@ -150,7 +172,7 @@ int pomHpSetHazard( PomHpLocalCtx *_lctx, void* _ptr, size_t idx ){
         return 1;
     }
     PomHpRec *hpRecord = _lctx->hp + idx;
-    // TODO atomically set this pointer
+    // TODO - consider setting this to relaxed (?) or release
     atomic_store( &hpRecord->hazardPtr, _ptr );
     return 0;
 }

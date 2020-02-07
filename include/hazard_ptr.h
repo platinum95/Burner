@@ -12,6 +12,7 @@ typedef struct PomHpLocalCtx PomHpLocalCtx;
 struct PomHpGlobalCtx{
     PomHpRec * _Atomic hpHead; // Atomic pointer to a hp record
     _Atomic size_t rNodeThreshold;
+    PomStackTsCtx * releasedPtrs;
 };
 
 struct PomHpLocalCtx{
@@ -20,6 +21,7 @@ struct PomHpLocalCtx{
     // Need some list type here, doesn't need to be type-safe
     PomStackCtx *rlist;
     size_t rcount;
+    _Atomic int allocCntr, freeCntr;
 };
 
 // Initialise the hazard pointer handler (call once per process)
@@ -35,9 +37,12 @@ int pomHpRetireNode( PomHpGlobalCtx *_ctx, PomHpLocalCtx *_lctx, void *_node );
 int pomHpSetHazard( PomHpLocalCtx *_lctx, void* _ptr, size_t idx );
 
 // Clear the thread-local hazard pointer data
-int pomHpThreadClear( PomHpLocalCtx *_lctx );
+int pomHpThreadClear( PomHpGlobalCtx *_ctx, PomHpLocalCtx *_lctx );
 
 // Clear the global hazard pointer data
 int pomHpGlobalClear( PomHpGlobalCtx *_ctx );
+
+// Request a node from the released list. Returns NULL if none available
+void *pomHpRequestNode( PomHpGlobalCtx *_ctx );
 
 #endif

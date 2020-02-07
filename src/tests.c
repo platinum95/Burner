@@ -22,7 +22,7 @@ void testThreadpool();
 int testModules(){
 //    testHashmap();
 //    testConfig();
-    testQueues();
+//    testQueues();
     testThreadpool();
     return 0;
 }
@@ -75,7 +75,7 @@ void testQueues(){
     pomHpThreadInit( hpgctx, hplctx, 2 );
 
     void * pushVal = (void*) 12345;
-    pomQueuePush( queueCtx, hplctx, pushVal );
+    pomQueuePush( queueCtx, hpgctx, hplctx, pushVal );
     void * val = pomQueuePop( queueCtx, hpgctx, hplctx );
     if( val != pushVal ){
         LOG( "Queue didn't pop same value as was pushed" );
@@ -112,5 +112,6 @@ void testThreadpool(){
     }
 
     pomThreadpoolClear( ctx );
+    free( ctx );
 }
 

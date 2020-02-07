@@ -37,4 +37,38 @@ int pomStackPush( PomStackCtx *_ctx, void * _data );
 // Push many nodes onto the stack (must be null terminated)
 int pomStackPushMany( PomStackCtx *_ctx, PomStackNode * _nodes );
 
+/*******************************************
+* Stack safe version
+********************************************/
+#include <threads.h>
+
+typedef struct PomStackTsCtx PomStackTsCtx;
+
+struct PomStackTsCtx{
+    PomStackNode *head;
+    int stackSize;
+    mtx_t mtx;
+};
+
+// Initialise the stack
+int pomStackTsInit( PomStackTsCtx *_ctx );
+
+// Clear the stack and free memory
+int pomStackTsClear( PomStackTsCtx *_ctx );
+
+// Pop all items off the stack (releasing memory ownership to caller)
+PomStackNode * pomStackTsPopAll( PomStackTsCtx *_ctx );
+
+// Pop a single item off the stack
+void * pomStackTsPop( PomStackTsCtx *_ctx );
+
+// Pop many items off the stack. Caller assumes responsibility for freeing the node memory
+int pomStackTsPopMany( PomStackTsCtx *_ctx, PomStackNode ** _nodes, int _numNodes );
+
+// Push a single item onto the stack
+int pomStackTsPush( PomStackTsCtx *_ctx, void * _data );
+
+// Push many nodes onto the stack (must be null terminated)
+int pomStackTsPushMany( PomStackTsCtx *_ctx, PomStackNode * _nodes );
+
 #endif // STACK_H
