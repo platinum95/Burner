@@ -12,7 +12,7 @@ typedef struct PomHpLocalCtx PomHpLocalCtx;
 struct PomHpGlobalCtx{
     PomHpRec * _Atomic hpHead; // Atomic pointer to a hp record
     _Atomic size_t rNodeThreshold;
-    PomStackTsCtx * releasedPtrs;
+    PomStackLfCtx * releasedPtrs;
     _Atomic int allocCntr, freeCntr;
 };
 

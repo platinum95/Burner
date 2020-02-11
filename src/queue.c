@@ -22,20 +22,23 @@ int pomQueueRetireNode( PomHpGlobalCtx *_hpgctx, PomHpLocalCtx *_hplctx, PomQueu
     // TODO - change this some_threshold stuff. Maybe increase it on each culling
     if( relStackSize > some_threshold ){
         // Cull the retired list down to free some space
-        PomStackNode * nNodes;
-        int ret = pomStackTsCull( _hpgctx->releasedPtrs, &nNodes, some_threshold / 2 );
+        // TODO - reimplement this
+        /*
+        PomStackLfNode * nNodes;
+        int ret = pomStackLfCull( _hpgctx->releasedPtrs, &nNodes, some_threshold / 2 );
         if( ret == 0 ){
             // Didn't pop any
             return 0;
         }
-        PomStackNode *currStackNode = nNodes;
+        PomStackLfNode *currStackNode = nNodes;
         while( currStackNode ){
             PomQueueNode * currQNode = (PomQueueNode*) currStackNode->data;
             free( currQNode );
-            free( currStackNode );
+            //free( currStackNode );
             currStackNode = currStackNode->next;
             atomic_fetch_add( &_hpgctx->freeCntr, 1 );
         }
+        */
     }
 
     return 0;
@@ -149,7 +152,7 @@ int pomQueueClear( PomQueueCtx *_ctx, PomHpGlobalCtx *_hpctx ){
     // Now go through the hazard pointer's released list to free up remaining nodes
     int i = 0;
     PomQueueNode *relStackNode;
-    while( ( relStackNode = (PomQueueNode*) pomStackTsPop( _hpctx->releasedPtrs ) ) ){
+    while( ( relStackNode = (PomQueueNode*) pomStackLfPop( _hpctx->releasedPtrs ) ) ){
         i++;
         free( relStackNode );
         atomic_fetch_add( &_hpctx->freeCntr, 1 );

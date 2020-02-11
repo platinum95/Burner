@@ -16,8 +16,8 @@ int pomHpGlobalInit( PomHpGlobalCtx *_ctx ){
     atomic_init( &_ctx->hpHead->next, NULL );
     atomic_init( &_ctx->hpHead->hazardPtr, NULL );
     atomic_init( &_ctx->rNodeThreshold, 10 ); // TODO have a proper threshold
-    _ctx->releasedPtrs = (PomStackTsCtx*) malloc( sizeof( PomStackTsCtx ) );
-    pomStackTsInit( _ctx->releasedPtrs );
+    _ctx->releasedPtrs = (PomStackLfCtx*) malloc( sizeof( PomStackLfCtx ) );
+    pomStackLfInit( _ctx->releasedPtrs );
 
     atomic_init( &_ctx->allocCntr, 0 );
     atomic_init( &_ctx->freeCntr, 0 );
@@ -86,7 +86,8 @@ int pomHpThreadClear( PomHpGlobalCtx *_ctx, PomHpLocalCtx *_lctx ){
         PomStackNode * nextNode = currNode->next;
         // Free the stack node and the queue node hazard pointer)
         currNode->next = NULL;
-        pomStackTsPushMany( _ctx->releasedPtrs, currNode );
+        pomStackLfPush( _ctx->releasedPtrs, currNode->data );
+        free( currNode );
         currNode = nextNode;
     }
 
@@ -98,12 +99,12 @@ int pomHpThreadClear( PomHpGlobalCtx *_ctx, PomHpLocalCtx *_lctx ){
 }
 
 void *pomHpRequestNode( PomHpGlobalCtx *_ctx ){
-    return pomStackTsPop( _ctx->releasedPtrs );
+    return pomStackLfPop( _ctx->releasedPtrs );
 }
 
 // Clear the global hazard pointer data
 int pomHpGlobalClear( PomHpGlobalCtx *_ctx ){
-    pomStackTsClear( _ctx->releasedPtrs );
+    pomStackLfClear( _ctx->releasedPtrs );
     free( _ctx->releasedPtrs );
     // Just need to free the dummy node at the head of the list
     free( _ctx->hpHead );
@@ -141,7 +142,7 @@ int pomHpScan( PomHpGlobalCtx *_ctx, PomHpLocalCtx *_lctx ){
             _lctx->rcount++;
         }else{
             // Can now release/reuse the retired pointer
-            pomStackTsPush( _ctx->releasedPtrs, currNode->data );
+            pomStackLfPush( _ctx->releasedPtrs, currNode->data );
             free( currNode ); // Free the node (not the hazard pointer)
         }
         currNode = nextNode;

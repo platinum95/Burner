@@ -76,7 +76,7 @@ int threadHouse( void *_arg ){
         if( pomQueueLength( jobQueue ) == 0 ){
             // Tell main thread (if waiting) that we're sleeping
             cnd_signal( &ctx->tJoinCond );
-            cnd_wait( &ctx->tWaitCond, &waitMtx );
+            cnd_timedwait( &ctx->tWaitCond, &waitMtx, &(struct timespec){.tv_sec=0, .tv_nsec=500} );
         }
 
         PomThreadpoolJob *job = pomQueuePop( jobQueue, ctx->hpgctx, tctx->hplctx );
@@ -105,7 +105,7 @@ int pomThreadpoolJoinAll( PomThreadpoolCtx *_ctx ){
         int tId = i + 1;
         PomThreadpoolThreadCtx * currThread = &_ctx->threadData[ tId ];
         while( atomic_load( &currThread->busy ) ){
-            cnd_wait( &_ctx->tJoinCond, &wMtx );
+            cnd_timedwait( &_ctx->tJoinCond, &wMtx, &(struct timespec){.tv_sec=0, .tv_nsec=500} );
         }
     }
     mtx_destroy( &wMtx );
