@@ -20,6 +20,29 @@ void testConfig();
 void testQueues();
 void testThreadpool();
 
+// Equivalent to b-a
+void timeDiff( struct timespec *a, struct timespec *b, struct timespec *out ){
+    int64_t secDiff = b->tv_sec - a->tv_sec;
+    int64_t nsDiff = b->tv_nsec - a->tv_nsec;
+    if( nsDiff < 0 ){
+        nsDiff = 1e9 - nsDiff;
+        secDiff--;
+    }
+    out->tv_nsec = nsDiff;
+    out->tv_sec = secDiff;
+}
+
+double concatTime( struct timespec *a ){
+    double sec = (double) a->tv_sec;
+    double nsec = (double) a->tv_nsec;
+    nsec = nsec / (double) 1e9;
+    return sec + nsec;
+}
+
+int getTime( struct timespec *_t ){
+    return clock_gettime( CLOCK_PROCESS_CPUTIME_ID, _t );
+}
+
 int testModules(){
 //    testHashmap();
 //    testConfig();
@@ -98,10 +121,11 @@ void testThreadFunc( void* _data ){
 void threadpoolSched( int numIter, PomThreadpoolCtx *_ctx, PomThreadpoolJob *job ){
     for( int i = 0; i < numIter; i++ ){
         pomThreadpoolScheduleJob( _ctx, job );
-     //   thrd_sleep( &(struct timespec){.tv_sec=0, .tv_nsec=1}, NULL );
+        //thrd_sleep( &(struct timespec){.tv_sec=0, .tv_nsec=1}, NULL );
     }
 }
-void threadpoolProfile( int numIter, void *data ){
+struct timespec threadpoolProfile( int numIter, void *data ){
+    struct timespec sjStart, sjEnd, sjTime;
     PomThreadpoolCtx *ctx = (PomThreadpoolCtx*) malloc( sizeof( PomThreadpoolCtx ) );
     pomThreadpoolInit( ctx, 4 );
     PomThreadpoolJob job = {
@@ -109,10 +133,18 @@ void threadpoolProfile( int numIter, void *data ){
         .args = data
     };
     
+    getTime( &sjStart );
+    
     threadpoolSched( numIter, ctx, &job );
     pomThreadpoolJoinAll( ctx );
+    
+    getTime( &sjEnd );
+    timeDiff( &sjStart, &sjEnd, &sjTime );
+    
     pomThreadpoolClear( ctx );
     free( ctx );
+
+    return sjTime;
 }
 
 void seqProfile( int numIter, void * data ){
@@ -121,50 +153,33 @@ void seqProfile( int numIter, void * data ){
     }
 }
 
-// Equivalent to b-a
-void timeDiff( struct timespec *a, struct timespec *b, struct timespec *out ){
-    int64_t secDiff = b->tv_sec - a->tv_sec;
-    int64_t nsDiff = b->tv_nsec - a->tv_nsec;
-    if( nsDiff < 0 ){
-        nsDiff = 1e9 - nsDiff;
-        secDiff--;
-    }
-    out->tv_nsec = nsDiff;
-    out->tv_sec = secDiff;
-}
-
-double concatTime( struct timespec *a ){
-    double sec = (double) a->tv_sec;
-    double nsec = (double) a->tv_nsec;
-    nsec = nsec / (double) 1e9;
-    return sec + nsec;
-}
 
 void testThreadpool(){
     // allocs (at worst) = 31 + (numIter * 4)
-    struct timespec tpStart, tpEnd, seqStart, seqEnd, tpTime, seqTime;
+    struct timespec tpStart, tpEnd, seqStart, seqEnd, tpTime, seqTime, sjTime;
     const int numIter = 1e4;
     _Atomic int var = 0;
     //int var = 0;
-    timespec_get( &tpStart, TIME_UTC );
-    threadpoolProfile( numIter, &var );
-    timespec_get( &tpEnd, TIME_UTC );
+    getTime( &tpStart );
+    sjTime = threadpoolProfile( numIter, &var );
+    getTime( &tpEnd );
     LOG( "Finished threadpool profile" );
     atomic_store( &var, 0 );
-    timespec_get( &seqStart, TIME_UTC );
+    getTime( &seqStart );
     seqProfile( numIter, &var );
-    timespec_get( &seqEnd, TIME_UTC );
+    getTime( &seqEnd );
 
     timeDiff( &tpStart, &tpEnd, &tpTime );
     timeDiff( &seqStart, &seqEnd, &seqTime );
 
     double tpTimeMs = concatTime( &tpTime );
     double seqTimeMs = concatTime( &seqTime );
+    double sjTimeMs = concatTime( &sjTime );
     
     //float tpTimeMs = ( (float) tPoolTime / (float) CLOCKS_PER_SEC ) * 1e3;
     //float seqTimeMs = ( (float) seqTime / (float) CLOCKS_PER_SEC ) * 1e3;
     float tpToSeqRatio = tpTimeMs / seqTimeMs ;
     LOG( "Threaded time: %f. Seq time %f. Tp is %f times slower or %f time faster.", tpTimeMs, seqTimeMs, tpToSeqRatio, 1/tpToSeqRatio );
-    
+    LOG( "SJ Time %f", sjTimeMs );
 }
 
