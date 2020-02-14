@@ -129,11 +129,7 @@ int pomThreadpoolClear( PomThreadpoolCtx *_ctx ){
     // Any waiting threads should now continue and exit
     // but we need to be sure they're dead before continuing
     int startIdx = 0;
-    int freeCnt = 0, allocCnt = 0;
-    PomThreadpoolThreadCtx *headThread = &_ctx->threadData[ 0 ];
-    pomHpThreadClear( _ctx->hpgctx, headThread->hplctx );
-    
-    free( headThread->hplctx );
+
     // Wait for all the threads to exit, then free their data
     for( int i = startIdx; i < _ctx->numThreads; i++ ){
         int tId = i + 1;
@@ -155,15 +151,18 @@ int pomThreadpoolClear( PomThreadpoolCtx *_ctx ){
     }
 
     
+    PomThreadpoolThreadCtx *headThread = &_ctx->threadData[ 0 ];
 
-    // Clear global hazard pointer and queue data
-    pomQueueClear( _ctx->jobQueue, _ctx->hpgctx );
+    // Clear reamining queue data to main threads retired list
+    pomQueueClear( _ctx->jobQueue, _ctx->hpgctx, headThread->hplctx );
+    
+    // Now clear the main threads HP data
+    pomHpThreadClear( _ctx->hpgctx, headThread->hplctx );\
+
+    // Finally clear the HP data
     pomHpGlobalClear( _ctx->hpgctx );
 
-    freeCnt = atomic_load( &_ctx->hpgctx->freeCntr );
-    allocCnt = atomic_load( &_ctx->hpgctx->allocCntr );
-
-    printf( "Allocated %i, freed %i\n", allocCnt, freeCnt );
+    free( headThread->hplctx );
 
     // Free threadpool pointers
     free( _ctx->hpgctx );

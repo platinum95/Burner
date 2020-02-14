@@ -3,16 +3,19 @@
 
 #include <stdatomic.h>
 #include <stddef.h>
+#include "common.h"
 #include "stack.h"
 
 typedef struct PomHpRec PomHpRec;
 typedef struct PomHpGlobalCtx PomHpGlobalCtx;
 typedef struct PomHpLocalCtx PomHpLocalCtx;
 
+typedef struct PomHpStackCtx PomHpStackCtx;
+
 struct PomHpGlobalCtx{
     PomHpRec * _Atomic hpHead; // Atomic pointer to a hp record
     _Atomic size_t rNodeThreshold;
-    PomStackLfCtx * releasedPtrs;
+    PomHpStackCtx * releasedPtrs;
     _Atomic int allocCntr, freeCntr;
 };
 
@@ -31,10 +34,10 @@ int pomHpGlobalInit( PomHpGlobalCtx *_ctx );
 int pomHpThreadInit( PomHpGlobalCtx *_ctx, PomHpLocalCtx *_lctx, size_t _numHp );
 
 // Mark a node for retirement
-int pomHpRetireNode( PomHpGlobalCtx *_ctx, PomHpLocalCtx *_lctx, void *_node );
+int pomHpRetireNode( PomHpGlobalCtx *_ctx, PomHpLocalCtx *_lctx, PomCommonNode *_node );
 
 // Set a hazard pointer in the thread-local list
-int pomHpSetHazard( PomHpLocalCtx *_lctx, void* _ptr, size_t idx );
+int pomHpSetHazard( PomHpLocalCtx *_lctx, PomCommonNode *_ptr, size_t idx );
 
 // Clear the thread-local hazard pointer data
 int pomHpThreadClear( PomHpGlobalCtx *_ctx, PomHpLocalCtx *_lctx );
@@ -43,6 +46,6 @@ int pomHpThreadClear( PomHpGlobalCtx *_ctx, PomHpLocalCtx *_lctx );
 int pomHpGlobalClear( PomHpGlobalCtx *_ctx );
 
 // Request a node from the released list. Returns NULL if none available
-void *pomHpRequestNode( PomHpGlobalCtx *_ctx );
+PomCommonNode *pomHpRequestNode( PomHpGlobalCtx *_ctx );
 
 #endif

@@ -6,17 +6,19 @@
 #include <stdint.h>
 
 
-typedef struct PomQueueNode PomQueueNode;
+//typedef struct PomQueueNode PomQueueNode;
 typedef struct PomQueueCtx PomQueueCtx;
 
+/*
 struct PomQueueNode {
     void * data;
     PomQueueNode * _Atomic next;
 };
+*/
 
 struct PomQueueCtx{
-    PomQueueNode * _Atomic head;
-    PomQueueNode * _Atomic tail;
+    PomCommonNode * _Atomic head;
+    PomCommonNode * _Atomic tail;
     _Atomic uint32_t queueLength;
 };
 
@@ -30,7 +32,7 @@ int pomQueuePush( PomQueueCtx *_ctx, PomHpGlobalCtx *_hpgctx, PomHpLocalCtx *_hp
 void * pomQueuePop( PomQueueCtx *_ctx, PomHpGlobalCtx *_hpctx, PomHpLocalCtx *_hplctx );
 
 // Clean up the queue
-int pomQueueClear( PomQueueCtx *_ctx, PomHpGlobalCtx *_hpctx );
+int pomQueueClear( PomQueueCtx *_ctx, PomHpGlobalCtx *_hpctx, PomHpLocalCtx *_hplctx );
 
 uint32_t pomQueueLength( PomQueueCtx *_ctx );
 

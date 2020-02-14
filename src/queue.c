@@ -5,48 +5,19 @@
 
 #define some_threshold 20
 
-PomQueueNode *pomQueueRequestNode( PomHpGlobalCtx *_hpgctx ){
-    PomQueueNode *node = (PomQueueNode*) pomHpRequestNode( _hpgctx );
-    if( !node ){
-         atomic_fetch_add( &_hpgctx->allocCntr, 1 );
-         node = (PomQueueNode*) malloc( sizeof( PomQueueNode ) );
-    }
+// TODO - can remove these 2 following functions
+PomCommonNode *pomQueueRequestNode( PomHpGlobalCtx *_hpgctx ){
+    PomCommonNode *node = (PomCommonNode*) pomHpRequestNode( _hpgctx );
     return node;
 }
 
-int pomQueueRetireNode( PomHpGlobalCtx *_hpgctx, PomHpLocalCtx *_hplctx, PomQueueNode *_node ){
-    
+int pomQueueRetireNode( PomHpGlobalCtx *_hpgctx, PomHpLocalCtx *_hplctx, PomCommonNode *_node ){
     pomHpRetireNode( _hpgctx, _hplctx, _node );
-
-    int relStackSize = _hpgctx->releasedPtrs->stackSize;
-    // TODO - change this some_threshold stuff. Maybe increase it on each culling
-    if( relStackSize > some_threshold ){
-        // Cull the retired list down to free some space
-        // TODO - reimplement this
-        /*
-        PomStackLfNode * nNodes;
-        int ret = pomStackLfCull( _hpgctx->releasedPtrs, &nNodes, some_threshold / 2 );
-        if( ret == 0 ){
-            // Didn't pop any
-            return 0;
-        }
-        PomStackLfNode *currStackNode = nNodes;
-        while( currStackNode ){
-            PomQueueNode * currQNode = (PomQueueNode*) currStackNode->data;
-            free( currQNode );
-            //free( currStackNode );
-            currStackNode = currStackNode->next;
-            atomic_fetch_add( &_hpgctx->freeCntr, 1 );
-        }
-        */
-    }
-
     return 0;
 }
 
-
 int pomQueueInit( PomQueueCtx *_ctx, size_t _dataLen ){
-    PomQueueNode * dummyNode = (PomQueueNode*) malloc( sizeof( PomQueueNode ) );
+    PomCommonNode * dummyNode = (PomCommonNode*) malloc( sizeof( PomCommonNode ) );
     dummyNode->data = NULL;
     atomic_init( &dummyNode->next, NULL );
     _ctx->head = dummyNode;
@@ -57,11 +28,11 @@ int pomQueueInit( PomQueueCtx *_ctx, size_t _dataLen ){
 }
 
 int pomQueuePush( PomQueueCtx *_ctx, PomHpGlobalCtx *_hpgctx, PomHpLocalCtx *_hplctx, void * _data ){
-    PomQueueNode *newNode = pomQueueRequestNode( _hpgctx );
-    PomQueueNode *nullNode = NULL;
+    PomCommonNode *newNode = pomQueueRequestNode( _hpgctx );
+    PomCommonNode *nullNode = NULL;
     newNode->next = NULL;
     newNode->data = _data;
-    PomQueueNode *tail;
+    PomCommonNode *tail;
     while( 1 ){
         tail = atomic_load( &_ctx->tail );
         // Ensure this is atomic
@@ -70,7 +41,7 @@ int pomQueuePush( PomQueueCtx *_ctx, PomHpGlobalCtx *_hpgctx, PomHpLocalCtx *_hp
             // Tail has been updated, reloop
             continue;
         }
-        PomQueueNode * next = atomic_load( &tail->next );
+        PomCommonNode * next = atomic_load( &tail->next );
         if( tail != atomic_load( &_ctx->tail ) ){
             continue;
         }
@@ -79,10 +50,11 @@ int pomQueuePush( PomQueueCtx *_ctx, PomHpGlobalCtx *_hpgctx, PomHpLocalCtx *_hp
             continue;
         }
         if( atomic_compare_exchange_strong( &tail->next, &nullNode, newNode ) ){
-            // Enque successful
+            // Enqueue successful
             break;
         }
     }
+
     atomic_compare_exchange_strong( &_ctx->tail, &tail, newNode );
     pomHpSetHazard( _hplctx, NULL, 0 );
     atomic_fetch_add( &_ctx->queueLength, 1 );
@@ -90,7 +62,7 @@ int pomQueuePush( PomQueueCtx *_ctx, PomHpGlobalCtx *_hpgctx, PomHpLocalCtx *_hp
 }
 
 void * pomQueuePop( PomQueueCtx *_ctx, PomHpGlobalCtx *_hpctx, PomHpLocalCtx *_hplctx ){
-    PomQueueNode *head, *tail, *next;
+    PomCommonNode *head, *tail, *next;
     void *data;
     while( 1 ){
         head = atomic_load( &_ctx->head );
@@ -133,15 +105,19 @@ uint32_t pomQueueLength( PomQueueCtx *_ctx ){
 
 #include <stdio.h>
 
-int pomQueueClear( PomQueueCtx *_ctx, PomHpGlobalCtx *_hpctx ){
-    // Assume at this point that no other threads are going to continue adding/removing stuff
+int pomQueueClear( PomQueueCtx *_ctx, PomHpGlobalCtx *_hpctx, PomHpLocalCtx *_hplctx ){
+    // Assume at this point that no other threads are going to continue adding/removing stuff.
+
+    // Return all the queue nodes to HP handler, i.e. retire them. HP will clear them up
+    // later. 
     if( atomic_load( &_ctx->queueLength ) ){
         // Clear any remaining items.
         // Unfreed data is lost (responsibility of queue owner to free them before calling this)
-        PomQueueNode * qNode = _ctx->head;
+        PomCommonNode * qNode = _ctx->head;
         while( qNode ){
-            PomQueueNode *nNode = qNode->next;
-            free( qNode );
+            PomCommonNode *nNode = qNode->next;
+            //free( qNode );
+            pomHpRetireNode( _hpctx, _hplctx, qNode );
             qNode = nNode;
         }
     }else{
@@ -149,14 +125,5 @@ int pomQueueClear( PomQueueCtx *_ctx, PomHpGlobalCtx *_hpctx ){
         free( _ctx->head );
     }
 
-    // Now go through the hazard pointer's released list to free up remaining nodes
-    int i = 0;
-    PomQueueNode *relStackNode;
-    while( ( relStackNode = (PomQueueNode*) pomStackLfPop( _hpctx->releasedPtrs ) ) ){
-        i++;
-        free( relStackNode );
-        atomic_fetch_add( &_hpctx->freeCntr, 1 );
-    }
-    printf( "%i nodes in released list\n", i );
     return 0;
 }
