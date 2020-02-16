@@ -100,7 +100,12 @@ int pomThreadpoolJoinAll( PomThreadpoolCtx *_ctx ){
     mtx_init( &wMtx, mtx_plain );
 
     // Wait for the current jobqueue to clear and tasks to finish
-    while( pomQueueLength( atomic_load( &_ctx->jobQueue ) ) );
+    while( pomQueueLength( atomic_load( &_ctx->jobQueue ) ) ){
+        // One of the worker threads should broadcast on this signal
+        // when the queue is empty
+        cnd_timedwait( &_ctx->tJoinCond, &wMtx, &(struct timespec){.tv_sec=0, .tv_nsec=500} );
+    }
+    // Make sure all the threads are idle before continuing
     for( int i = 0; i < _ctx->numThreads; i++ ){
         int tId = i + 1;
         PomThreadpoolThreadCtx * currThread = &_ctx->threadData[ tId ];
