@@ -31,7 +31,7 @@ int pomThreadpoolInit( PomThreadpoolCtx *_ctx, uint16_t _numThreads ){
     PomQueueCtx *jobQueue = (PomQueueCtx*) malloc( sizeof( PomQueueCtx ) );
     atomic_store( &_ctx->jobQueue, jobQueue );
 
-    pomQueueInit( _ctx->jobQueue, sizeof( PomThreadpoolJob ) );
+    pomQueueInit( _ctx->jobQueue );
     _ctx->hpgctx = (PomHpGlobalCtx*) malloc( sizeof( PomHpGlobalCtx ) );
     pomHpGlobalInit( _ctx->hpgctx );
     cnd_init( &_ctx->tWaitCond );

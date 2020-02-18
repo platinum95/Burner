@@ -10,6 +10,7 @@ int pomStackInit( PomStackCtx *_ctx ){
 // Clear the stack and free memory
 int pomStackClear( PomStackCtx *_ctx ){
     // TODO - implement this cleaning code
+    _ctx->head = NULL;
     return 0;
 }
 

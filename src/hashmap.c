@@ -279,8 +279,8 @@ int pomMapRemove( PomMapCtx *_ctx, const char * _key ){
 // Clean up the map
 int pomMapClear( PomMapCtx *_ctx ){
     LOG( "Clearing hashmap" );
-    int freeCnt = 0;
-    for( int i = 0; i < _ctx->numBuckets; i++ ){
+    uint32_t freeCnt = 0;
+    for( uint32_t i = 0; i < _ctx->numBuckets; i++ ){
         PomMapBucket * curBucket = &_ctx->buckets[ i ];
         PomMapNode * curNode = curBucket->listHead;
         PomMapNode * nextNode = NULL;
@@ -322,7 +322,7 @@ int pomMapResize( PomMapCtx *_ctx, uint32_t _size ){
     PomMapNode * nodeHead = NULL;
     PomMapNode * lastNode = NULL;
     uint32_t nodesCounted = 0;
-    for( int i = 0; i < _ctx->numBuckets; i++ ){
+    for( uint32_t i = 0; i < _ctx->numBuckets; i++ ){
         PomMapBucket * curBucket = &_ctx->buckets[ i ];
         PomMapNode * nodeIter = curBucket->listHead;
         if( !nodeIter ){
@@ -383,7 +383,7 @@ int pomMapResize( PomMapCtx *_ctx, uint32_t _size ){
 int pomMapOptimise( PomMapCtx *_ctx ){
     // Count the required bytes of all nodes
     size_t totalBytesReq = 0;
-    for( int i = 0; i < _ctx->numBuckets; i++ ){
+    for( uint32_t i = 0; i < _ctx->numBuckets; i++ ){
         PomMapBucket * curBucket = &_ctx->buckets[ i ];
         PomMapNode * nodeIter = curBucket->listHead;
         while( nodeIter ){
@@ -408,7 +408,7 @@ int pomMapOptimise( PomMapCtx *_ctx ){
     size_t currOffset = 0;
     LOG( "Reordering hashmap" );
     // Copy the data to the new buffer and update the key/value pointers
-    for( int i = 0; i < _ctx->numBuckets; i++ ){
+    for( uint32_t i = 0; i < _ctx->numBuckets; i++ ){
         PomMapBucket * curBucket = &_ctx->buckets[ i ];
         PomMapNode * nodeIter = curBucket->listHead;
         while( nodeIter ){

@@ -1,6 +1,6 @@
 INCLUDES = ./include
 CC=gcc
-CFLAGS=-I$(INCLUDES) -O0 -Wall -Werror -pg
+CFLAGS=-I$(INCLUDES) -O0 -Wall -Werror -Wextra -Wformat=2 -Wshadow -pedantic -pg
 
 SRC_DIR = ./src
 SRC = $(wildcard $(SRC_DIR)/*.c)
@@ -23,4 +23,5 @@ $(OBJ_DIR):
 .PHONY: clean
 
 clean:
-	rm -f $(OBJ_DIR)/*.o *~ core $(INCDIR)/*~ 
+	rm -f $(OBJ_DIR)/*.o *~ core $(INCDIR)/*~
+

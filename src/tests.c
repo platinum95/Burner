@@ -90,7 +90,7 @@ void testHashmap(){
 void testQueues(){
     LOG( "Testing queues" );
     PomQueueCtx *queueCtx = (PomQueueCtx*) malloc( sizeof( PomQueueCtx ) );
-    pomQueueInit( queueCtx, sizeof( uint64_t ) );
+    pomQueueInit( queueCtx );
 
     PomHpGlobalCtx *hpgctx = (PomHpGlobalCtx*) malloc( sizeof( PomHpGlobalCtx ) );
     PomHpLocalCtx *hplctx = (PomHpLocalCtx*) malloc( sizeof( PomHpLocalCtx ) );
@@ -109,9 +109,10 @@ void testQueues(){
     }
 }
 
-void testThreadFunc( void* _data ){
+void testThreadFunc( void* UNUSED( _data ) ){
     //_Atomic int *var = (_Atomic int *) _data;
     //atomic_fetch_add( var, 1 );
+    
 
     thrd_sleep( &( struct timespec){.tv_sec=0, .tv_nsec=0}, NULL );
     //int *var  = (int*) _data;

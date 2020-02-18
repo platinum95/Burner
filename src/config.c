@@ -148,7 +148,7 @@ int saveSystemConfig( SystemConfig * _config, const char * path ){
         return 1;
     }
 
-    long cWrote = fwrite( mapDataCpy, 1, mapDataUsed, configFile );
+    size_t cWrote = fwrite( mapDataCpy, 1, mapDataUsed, configFile );
 
     if( cWrote != mapDataUsed ){
         LOG( "Error occurred when writing config file %s", path );

@@ -65,7 +65,7 @@ int pomHpThreadInit( PomHpGlobalCtx *_ctx, PomHpLocalCtx *_lctx, size_t _numHp )
     PomHpRec *newHps = (PomHpRec*) malloc( sizeof( PomHpRec ) * _numHp );
     atomic_init( &newHps[ 0 ].hazardPtr, NULL );
     atomic_init( &newHps[ 0 ].next, NULL );
-    for( int i = 1; i < _numHp; i++ ){
+    for( uint32_t i = 1; i < _numHp; i++ ){
         atomic_init( &newHps[ i-1 ].hazardPtr, NULL );
         atomic_init( &newHps[ i-1 ].next, &newHps[ i ] );
     }

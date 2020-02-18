@@ -23,7 +23,7 @@ struct PomQueueCtx{
 };
 
 // Initialise the thread-safe queue
-int pomQueueInit( PomQueueCtx *_ctx, size_t _dataLen );
+int pomQueueInit( PomQueueCtx *_ctx );
 
 // Add an item to the queue
 int pomQueuePush( PomQueueCtx *_ctx, PomHpGlobalCtx *_hpgctx, PomHpLocalCtx *_hplctx, void * _data );

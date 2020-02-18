@@ -16,7 +16,7 @@ int pomQueueRetireNode( PomHpGlobalCtx *_hpgctx, PomHpLocalCtx *_hplctx, PomComm
     return 0;
 }
 
-int pomQueueInit( PomQueueCtx *_ctx, size_t _dataLen ){
+int pomQueueInit( PomQueueCtx *_ctx ){
     PomCommonNode * dummyNode = (PomCommonNode*) malloc( sizeof( PomCommonNode ) );
     dummyNode->data = NULL;
     atomic_init( &dummyNode->next, NULL );
