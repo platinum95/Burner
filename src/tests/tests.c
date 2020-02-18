@@ -109,16 +109,17 @@ void testQueues(){
     }
 }
 
-void testThreadFunc( void* UNUSED( _data ) ){
-    //_Atomic int *var = (_Atomic int *) _data;
-    //atomic_fetch_add( var, 1 );
+void testThreadFuncSanity( void* UNUSED( _data ) ){
+    // Do some work here. Not using thrd_sleep since
+    // it makes profiling a bit more difficult
     for( int i = 0; i < 1e3; i++ ){
         int UNUSED( a ) = i + 10;
     }
+}
 
-    //thrd_sleep( &( struct timespec){.tv_sec=0, .tv_nsec=0}, NULL );
-    //int *var  = (int*) _data;
-    //(*var)++;
+void testThreadFuncTiming( void* _data ){
+    struct timespec *t = (struct timespec*) _data;
+    getTime( t );
 }
 
 void threadpoolSched( int numIter, PomThreadpoolCtx *_ctx, PomThreadpoolJob *job ){
@@ -127,24 +128,60 @@ void threadpoolSched( int numIter, PomThreadpoolCtx *_ctx, PomThreadpoolJob *job
         //thrd_sleep( &(struct timespec){.tv_sec=0, .tv_nsec=1}, NULL );
     }
 }
-struct timespec threadpoolProfile( int numIter, void *data ){
+
+struct timespec threadpoolProfile( void *data ){
     uint8_t numThreads = 3;
+    uint32_t sanityNumIter = 1e4;
+    uint32_t timingNumIter = 1e4;
     struct timespec sjStart, sjEnd, sjTime;
     PomThreadpoolCtx *ctx = (PomThreadpoolCtx*) malloc( sizeof( PomThreadpoolCtx ) );
     pomThreadpoolInit( ctx, numThreads );
-    PomThreadpoolJob job = {
-        .func= testThreadFunc,
+    PomThreadpoolJob sanityJob = {
+        .func= testThreadFuncSanity,
         .args = data
     };
+    struct timespec eTime;
+    PomThreadpoolJob timingJob = {
+        .func= testThreadFuncTiming,
+        .args = &eTime
+    };
     
+    // Run sanity check
     getTime( &sjStart );
-    
-    threadpoolSched( numIter, ctx, &job );
+    threadpoolSched( sanityNumIter, ctx, &sanityJob );
     pomThreadpoolJoinAll( ctx );
-    
     getTime( &sjEnd );
     timeDiff( &sjStart, &sjEnd, &sjTime );
-    
+
+    double timingAccumulator = 0.0;
+    struct timespec sTime;
+    // Run timing check
+    for( uint32_t i = 0; i < timingNumIter; i++ ){
+        getTime( &sTime );
+        pomThreadpoolScheduleJob( ctx, &timingJob );
+        thrd_sleep( &(struct timespec){.tv_sec=0, .tv_nsec=15e3}, NULL );
+        pomThreadpoolJoinAll( ctx );
+        struct timespec tDiff;
+        timeDiff( &sTime, &eTime, &tDiff );
+        double jTimeTaken = concatTime( &tDiff );
+        timingAccumulator += jTimeTaken;
+    }
+    timingAccumulator = timingAccumulator / timingNumIter;
+    LOG( "Average time to start job %1.6fus", timingAccumulator * 1e6 );
+
+    timingAccumulator = 0.0;
+    // Run timing check for direct call
+    for( uint32_t i = 0; i < timingNumIter; i++ ){
+        getTime( &sTime );
+        testThreadFuncTiming( &eTime );
+        struct timespec tDiff;
+        timeDiff( &sTime, &eTime, &tDiff );
+        double jTimeTaken = concatTime( &tDiff );
+        timingAccumulator += jTimeTaken;
+    }
+    timingAccumulator = timingAccumulator / timingNumIter;
+    LOG( "Average time to start direct call %1.6fus", timingAccumulator * 1e6 );
+
     pomThreadpoolClear( ctx );
     free( ctx );
 
@@ -153,7 +190,7 @@ struct timespec threadpoolProfile( int numIter, void *data ){
 
 void seqProfile( int numIter, void * data ){
     for( int i = 0; i < numIter; i++){
-        testThreadFunc( data );
+        testThreadFuncSanity( data );
     }
 }
 
@@ -161,11 +198,10 @@ void seqProfile( int numIter, void * data ){
 void testThreadpool(){
     // allocs (at worst) = 31 + (numIter * 4)
     struct timespec tpStart, tpEnd, seqStart, seqEnd, tpTime, seqTime, sjTime;
-    const int numIter = 1e6;
     _Atomic int var = 0;
     //int var = 0;
     getTime( &tpStart );
-    sjTime = threadpoolProfile( numIter, &var );
+    sjTime = threadpoolProfile( &var );
     getTime( &tpEnd );
     LOG( "Finished threadpool profile" );
     atomic_store( &var, 0 );
