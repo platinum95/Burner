@@ -108,7 +108,13 @@ int pomThreadpoolJoinAll( PomThreadpoolCtx *_ctx ){
     while( pomQueueLength( atomic_load( &_ctx->jobQueue ) ) ){
         // One of the worker threads should broadcast on this signal
         // when the queue is empty
-        cnd_timedwait( &_ctx->tJoinCond, &wMtx, &(struct timespec){.tv_sec=0, .tv_nsec=500} );
+        //cnd_timedwait( &_ctx->tJoinCond, &wMtx, &(struct timespec){.tv_sec=0, .tv_nsec=500} );
+        PomThreadpoolJob *job = pomQueuePop( _ctx->jobQueue, _ctx->hpgctx, _ctx->threadData[ 0 ].hplctx );
+        if( job ){
+            // We have a job to execute
+            job->func( job->args );
+        }
+
     }
     // Make sure all the threads are idle before continuing
     for( int i = 0; i < _ctx->numThreads; i++ ){
