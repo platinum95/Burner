@@ -43,7 +43,11 @@ int pomStackPushMany( PomStackCtx *_ctx, PomCommonNode * _nodes );
 /*******************************************
 * Thread-safe version - locked
 ********************************************/
+#if defined(__STDC_NO_THREADS__) || defined(_WIN32) || defined(__CYGWIN__)
+#include "tinycthread.h"
+#else
 #include <threads.h>
+#endif
 
 typedef struct PomStackTsCtx PomStackTsCtx;
 

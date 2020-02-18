@@ -2,7 +2,12 @@
 #include <stdatomic.h>
 #include <stdlib.h>
 #include <stdbool.h>
+
+#if defined(__STDC_NO_THREADS__) || defined(_WIN32) || defined(__CYGWIN__)
+#include "tinycthread.h"
+#else
 #include <threads.h>
+#endif
 
 struct PomThreadpoolThreadCtx{
     uint16_t tId;

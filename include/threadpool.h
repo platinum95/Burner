@@ -3,7 +3,11 @@
 
 #include <stdint.h>
 #include "queue.h"
-#include "threads.h"
+#if defined(__STDC_NO_THREADS__) || defined(_WIN32) || defined(__CYGWIN__)
+#include "tinycthread.h"
+#else
+#include <threads.h>
+#endif
 
 typedef struct PomThreadpoolCtx PomThreadpoolCtx;
 typedef struct PomThreadpoolThreadCtx PomThreadpoolThreadCtx;
