@@ -5,17 +5,6 @@
 
 #define some_threshold 20
 
-// TODO - can remove these 2 following functions
-PomCommonNode *pomQueueRequestNode( PomHpGlobalCtx *_hpgctx ){
-    PomCommonNode *node = (PomCommonNode*) pomHpRequestNode( _hpgctx );
-    return node;
-}
-
-int pomQueueRetireNode( PomHpGlobalCtx *_hpgctx, PomHpLocalCtx *_hplctx, PomCommonNode *_node ){
-    pomHpRetireNode( _hpgctx, _hplctx, _node );
-    return 0;
-}
-
 int pomQueueInit( PomQueueCtx *_ctx ){
     PomCommonNode * dummyNode = (PomCommonNode*) malloc( sizeof( PomCommonNode ) );
     dummyNode->data = NULL;
@@ -28,7 +17,7 @@ int pomQueueInit( PomQueueCtx *_ctx ){
 }
 
 int pomQueuePush( PomQueueCtx *_ctx, PomHpGlobalCtx *_hpgctx, PomHpLocalCtx *_hplctx, void * _data ){
-    PomCommonNode *newNode = pomQueueRequestNode( _hpgctx );
+    PomCommonNode *newNode = (PomCommonNode*) pomHpRequestNode( _hpgctx );
     PomCommonNode *nullNode = NULL;
     newNode->next = NULL;
     newNode->data = _data;
@@ -93,7 +82,7 @@ void * pomQueuePop( PomQueueCtx *_ctx, PomHpGlobalCtx *_hpctx, PomHpLocalCtx *_h
     }
     pomHpSetHazard( _hplctx, NULL, 0 );
     pomHpSetHazard( _hplctx, NULL, 1 );
-    pomQueueRetireNode( _hpctx, _hplctx, head );
+    pomHpRetireNode( _hpctx, _hplctx, head );
     //pomHpRetireNode( _hpctx, _hplctx, head );
     atomic_fetch_add( &_ctx->queueLength, -1 );
     return data;

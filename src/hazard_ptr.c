@@ -165,8 +165,8 @@ int pomHpGlobalClear( PomHpGlobalCtx *_ctx ){
 
 int pomHpScan( PomHpGlobalCtx *_ctx, PomHpLocalCtx *_lctx ){
     // Stage 1 - scan each thread's hazard pointers and add non-null values to local list
-    PomLinkedListCtx *plist = (PomLinkedListCtx*) malloc( sizeof( PomLinkedListCtx ) );
-    pomLinkedListInit( plist );
+    PomLinkedListCtx plist;
+    pomLinkedListInit( &plist );
     // TODO - consider making the HpRec loads memory_order_acquire
     // They're current seq_cst so hazardPtr should be loaded OK despite 
     // being stored with mem_order_relaxed
@@ -174,7 +174,7 @@ int pomHpScan( PomHpGlobalCtx *_ctx, PomHpLocalCtx *_lctx ){
     while( hpRec ){
         void * ptr = atomic_load( &hpRec->hazardPtr );
         if( ptr ){
-            pomLinkedListAdd( plist, (PllKeyType) ptr );
+            pomLinkedListAdd( &plist, (PllKeyType) ptr );
         }
         hpRec = atomic_load( &hpRec->next );
     }
@@ -186,7 +186,7 @@ int pomHpScan( PomHpGlobalCtx *_ctx, PomHpLocalCtx *_lctx ){
     PomCommonNode *currNode = retireNodes;
     while( currNode ){
         PomCommonNode * nextNode = currNode->next;
-        if( pomLinkedListFind( plist, (PllKeyType) currNode ) ){
+        if( pomLinkedListFind( &plist, (PllKeyType) currNode ) ){
             // Pointer to retire is currently used (is a hazard pointer)
             currNode->next = NULL;
             pomStackPush( _lctx->rlist, currNode );
@@ -199,8 +199,7 @@ int pomHpScan( PomHpGlobalCtx *_ctx, PomHpLocalCtx *_lctx ){
     }
     
     // Can clean up plist now
-    pomLinkedListClear( plist );
-    free( plist );
+    pomLinkedListClear( &plist );
 
     return 0;
 }
