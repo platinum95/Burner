@@ -13,8 +13,6 @@
 #define DEFAULT_CONFIG_PATH "./config.ini"
 #endif
 
-int testModules();
-
 int main( int argc, char ** argv ){
     LOG( "Program Entry" );
 
@@ -28,7 +26,7 @@ int main( int argc, char ** argv ){
         configPath = DEFAULT_CONFIG_PATH;
     }
     LOG( "Config file: %s", configPath );
-    testModules();
+
 /*
     SystemConfig sysConfig;
     if( loadSystemConfig( configPath, &sysConfig ) ){
