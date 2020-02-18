@@ -41,7 +41,7 @@ $(OBJ_DIR):
 
 .PHONY: clean
 clean:
-	rm -f *~ core $(INCDIR)/*~
+	rm -f *~ core burner tests $(INCDIR)/*~
 	rm -r $(OBJ_DIR)
 
 # Make the obj directory
