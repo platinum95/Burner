@@ -1,6 +1,8 @@
 #include "system_hw.h"
 #include <stdlib.h>
 #include <stdio.h>
+#include <vulkan/vulkan.h>
+
 
 int get_info( int some_param, system_hw_context * sys_ctx ){
     sys_ctx = ( system_hw_context*) malloc( sizeof( system_hw_context ) );

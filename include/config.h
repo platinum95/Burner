@@ -1,16 +1,19 @@
 #include <stdbool.h>
 #include "hashmap.h"
 
+typedef struct SystemConfig SystemConfig;
 
-typedef struct SystemConfig{
+struct SystemConfig{
     bool initialised;
     //TODO change this name
     int numPairs;
     PomMapCtx mapCtx;
-}SystemConfig;
+};
 
-int loadSystemConfig( const char * path, SystemConfig * config );
+extern SystemConfig systemConfig;
 
-int saveSystemConfig( SystemConfig * _config, const char * path );
+int loadSystemConfig( const char * path );
 
-int clearSystemConfig( SystemConfig * config );
+int saveSystemConfig( const char * path );
+
+int clearSystemConfig();

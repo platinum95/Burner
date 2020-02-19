@@ -8,13 +8,16 @@
 #define LOG( log, ... ) LOG_MODULE( DEBUG, config, log, ##__VA_ARGS__ )
 
 static const char separator = '=';
+SystemConfig systemConfig = { 0 };
 
-void createDefaultConfig( SystemConfig * _config ){
-    _config->initialised = true;
-    pomMapInit( &_config->mapCtx, 0 );
+void createDefaultConfig(){
+    SystemConfig * config = &systemConfig;
+    config->initialised = true;
+    pomMapInit( &config->mapCtx, 0 );
 }
 
-int loadSystemConfig( const char * path, SystemConfig * config ){
+int loadSystemConfig( const char * path ){
+    SystemConfig *config = &systemConfig;
     // Quick sanity check on the config and path
     if( !( path && config ) ){
         return 1;
@@ -111,7 +114,8 @@ int loadSystemConfig( const char * path, SystemConfig * config ){
 }
 
 
-int saveSystemConfig( SystemConfig * _config, const char * path ){
+int saveSystemConfig( const char * path ){
+    SystemConfig *_config = &systemConfig;
     // Optimise the map to consolidate all the data
     pomMapOptimise( &_config->mapCtx );
     size_t mapDataSize, mapDataUsed;
@@ -166,7 +170,8 @@ int saveSystemConfig( SystemConfig * _config, const char * path ){
 }
 
 
-int clearSystemConfig( SystemConfig * config ){
+int clearSystemConfig(){
+    SystemConfig *config = &systemConfig;
     if( config->initialised ){
         pomMapClear( &config->mapCtx );
         config->initialised = false;

@@ -1,6 +1,10 @@
 INCLUDES    = ./include
 CC          = gcc
 CFLAGS      = -I$(INCLUDES) -O0 -Wall -Werror -Wextra -Wformat=2 -Wshadow -pedantic -g
+LIBS        = -lm -lpthread -lvulkan -lglfw
+
+DEFINES     = -DBURNER_VERSION_MAJOR=0 -DBURNER_VERSION_MINOR=0 -DBURNER_VERSION_PATCH=0
+DEFINES    := -DBURNER_NAME="Burner"
 
 SRC_DIR     = ./src
 OBJ_DIR     = ./obj
@@ -20,7 +24,7 @@ OBJ         = $(patsubst $(SRC_DIR)/%.c,$(OBJ_DIR)/%.o,$(SRC))
 BURNER_OBJ  = $(patsubst $(SRC_DIR)/%.c,$(OBJ_DIR)/%.o,$(BURNER_SRC))
 TESTS_OBJ   = $(patsubst $(TESTS_DIR)/%.c,$(OBJ_DIR)/%.o,$(TESTS_SRC))
 TEST_OBJ    = $(patsubst $(TESTS_DIR)/%.c,$(OBJ_DIR)/%.o,$(TEST_SRC))
-LIBS        = -lm -lpthread
+
 
 all: burner tests
 

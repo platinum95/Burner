@@ -4,6 +4,7 @@
 #include "system_hw.h"
 #include "hashmap.h"
 #include "common.h"
+#include "vkinstance.h"
 
 // Just going to use debug level for now
 #define LOG( log, ... ) LOG_MODULE( DEBUG, main, log, ##__VA_ARGS__ )
@@ -27,19 +28,24 @@ int main( int argc, char ** argv ){
     }
     LOG( "Config file: %s", configPath );
 
-/*
-    SystemConfig sysConfig;
-    if( loadSystemConfig( configPath, &sysConfig ) ){
+
+    if( loadSystemConfig( configPath ) ){
         printf( "Error loading configuration file\n" );
     }
 
-    const char * testPath = getConfigValue( &sysConfig, "modelBasePath", "test" )->value;
-    if( testPath ){
-        printf( "Model base path: %s\n", testPath );
+    LOG( "Create Vk instance" );
+    if( pomCreateVkInstance() ){
+        LOG( "Error in instance creation" );
     }
-    
-    clearSystemConfig( &sysConfig );
-*/
+    LOG( "Destroy Vk instance" );
+    if( pomDestroyVkInstance() ){
+        LOG( "Error in deletion of vk instance" );
+    } 
     LOG( "Program exit" );
+
+    if( saveSystemConfig( configPath ) ){
+        LOG( "Couldn't write new config files" );
+    }
+    clearSystemConfig();
     return EXIT_SUCCESS;
 }
