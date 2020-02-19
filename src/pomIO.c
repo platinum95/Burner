@@ -102,8 +102,7 @@ const char ** pomIoGetWindowExtensions( uint32_t * _ecount ){
         *_ecount = 0;
         return NULL;
     }
-    *_ecount = 0;
-    return NULL;//glfwGetRequiredInstanceExtensions( _ecount );
+    return glfwGetRequiredInstanceExtensions( _ecount );
 }
 
 
