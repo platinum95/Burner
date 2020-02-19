@@ -32,6 +32,9 @@
 #ifndef DEFAULT_HEIGHT
 #define DEFAULT_HEIGHT "600"
 #endif //DEFAULT_HEIGHT
+#ifndef DEFAULT_VK_VALIDATION_LAYERS
+#define DEFAULT_VK_VALIDATION_LAYERS "VK_LAYER_KHRONOS_validation"
+#endif //DEFAULT_HEIGHT
 
 // TODO - move this def to somewhere more common
 typedef struct PomCommonNode PomCommonNode;
