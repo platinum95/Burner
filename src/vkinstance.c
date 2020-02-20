@@ -240,3 +240,12 @@ int pomDestroyVkInstance(){
     pomMapClear( &pomVkCtx.extMap );
     return 0;
 }
+
+
+VkInstance* pomGetVkInstance(){
+    if( pomVkCtx.initialised ){
+        return &pomVkCtx.instance;
+    }
+    LOG_ERR( "Requested uninitialised VK Instance" );
+    return NULL;
+}

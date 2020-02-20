@@ -6,8 +6,8 @@
 #include <stdio.h>
 #include "common.h"
 
-#define LOG( log, ... ) LOG_MODULE( DEBUG, hashmap, log, ##__VA_ARGS__ )
-
+//#define LOG( log, ... ) LOG_MODULE( DEBUG, hashmap, log, ##__VA_ARGS__ )
+#define LOG( log, ... )
 
 #define POM_MAP_DEFAULT_SIZE 32 // Default number of buckets in list
 #define POM_MAP_HEAP_SIZE 256   // Default size of the data heaps
@@ -395,14 +395,14 @@ int pomMapOptimise( PomMapCtx *_ctx ){
             nodeIter = nodeIter->next;
         }
     }
-    //size_t totalBytesReq = _ctx->dataHeap->heapUsed;
-    size_t currHeapSize = _ctx->dataHeap->numHeapBlocks * POM_MAP_HEAP_SIZE;
-
+    
     // Check if we can downsize the heap
     // Rounding up by x/y -> (x+y-1)/y
     uint32_t blocksReq = ( totalBytesReq + POM_MAP_HEAP_SIZE - 1 ) / POM_MAP_HEAP_SIZE;
     size_t newHeapSize = blocksReq * POM_MAP_HEAP_SIZE;
-    LOG( "Current heap size: %zu. Total bytes required %zu", currHeapSize, newHeapSize );
+    LOG( "Current heap size: %zu. Total bytes required %zu",
+         _ctx->dataHeap->numHeapBlocks * POM_MAP_HEAP_SIZE,
+         newHeapSize );
     // Create new heap to copy data into
     char * newHeap = (char*) malloc( sizeof( char ) * newHeapSize );
     size_t currOffset = 0;

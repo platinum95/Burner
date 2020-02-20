@@ -3,3 +3,5 @@
 int pomCreateVkInstance();
 
 int pomDestroyVkInstance();
+
+VkInstance* pomGetVkInstance();

@@ -5,6 +5,7 @@
 #include "hashmap.h"
 #include "common.h"
 #include "vkinstance.h"
+#include "vkdevice.h"
 
 // Just going to use debug level for now
 #define LOG( log, ... ) LOG_MODULE( DEBUG, main, log, ##__VA_ARGS__ )
@@ -36,6 +37,15 @@ int main( int argc, char ** argv ){
     LOG( "Create Vk instance" );
     if( pomCreateVkInstance() ){
         LOG( "Error in instance creation" );
+    }
+    LOG( "Find device" );
+    if( pomPickPhysicalDevice() ){
+        LOG( "Error in physical device creation" );
+    }
+
+    LOG( "Destroy device" )
+    if( pomDestroyPhysicalDevice() ){
+        LOG( "Error in destroying device" );
     }
     LOG( "Destroy Vk instance" );
     if( pomDestroyVkInstance() ){
