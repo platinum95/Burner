@@ -123,7 +123,7 @@ static uint16_t phyDeviceElgibility( VkPhysicalDeviceCtx *_phyDevCtx ){
             // Check also for queue flags and queue count requirements.
             if( ( qFamFound->found && !qReq->mayOverlap ) ||
                 ( qFamFound->found && !qReqs[ qFamFound->reqIdx ].mayOverlap ) ||
-                ( qFamProp->queueFlags != qReq->flags ) ||
+                ( ( qFamProp->queueFlags & qReq->flags ) != qReq->flags ) ||
                 ( qFamProp->queueCount < qReq->minQueues ) ){
                 
                 // Queue family does not meet requirements
@@ -212,6 +212,7 @@ int pomPickPhysicalDevice(){
                 LOG_WARN( "Requested device %s does not meet requirements", requestedDev );
                 continue;
             }
+            LOG( "Using config requested device" );
             hiIdx = i;
             hiScore = devScore;
             break;
@@ -230,9 +231,8 @@ int pomPickPhysicalDevice(){
     
     // Copy our chosen device ctx over to main static context
     VkPhysicalDeviceCtx *devCtx = &phyDevCtxs[ hiIdx ];
-    VkPhysicalDevice *dev = &devCtx->phyDev;
     vkDeviceCtx.physicalDeviceCtx = *devCtx;
-
+    devCtx = &vkDeviceCtx.physicalDeviceCtx;
     // Free up the queue family property arrays for all devices (except the chosen one)
     for( uint32_t i = 0; i < phyDevCount; i++ ){
         if( i == hiIdx ){
@@ -243,15 +243,10 @@ int pomPickPhysicalDevice(){
     // Now free the array of all contexts
     free( phyDevCtxs );
 
-    VkPhysicalDeviceProperties devProps;
-    vkGetPhysicalDeviceProperties( *dev, &devProps );
-    const char * devName = devProps.deviceName;
-    if( requestedDev && strcmp( devName, requestedDev ) != 0 ){
-        LOG_WARN( "Requested device %s could not be found", requestedDev );
-    }
-    LOG( "Using device %s", devName );
+
+    LOG( "Using device %s", devCtx->phyDevProps.deviceName );
     // Make sure the config is set with our chosen device
-    pomMapSet( &systemConfig.mapCtx, "vulkan_device_name", devProps.deviceName );
+    pomMapSet( &systemConfig.mapCtx, "vulkan_device_name", devCtx->phyDevProps.deviceName );
 
     // At this point we have a physical device selected,
     // with a context for it that specifies the queue families
@@ -284,7 +279,7 @@ int pomPickPhysicalDevice(){
         .ppEnabledLayerNames = NULL
     };
     
-    VkResult devRes = vkCreateDevice( *dev, &vkDevCreateInfo, NULL, &vkDeviceCtx.logicalDevice );
+    VkResult devRes = vkCreateDevice( devCtx->phyDev, &vkDevCreateInfo, NULL, &vkDeviceCtx.logicalDevice );
     if( devRes != VK_SUCCESS ){
         LOG_ERR( "Failed to create logical device" );
         return 1;
