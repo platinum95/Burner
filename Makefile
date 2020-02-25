@@ -1,6 +1,6 @@
 INCLUDES    = ./include
 CC          = gcc
-CFLAGS      = -I$(INCLUDES) -O0 -Wall -Werror -Wextra -Wformat=2 -Wshadow -pedantic -g
+CFLAGS      = -I$(INCLUDES) -O0 -Wall -Werror -Wextra -Wformat=2 -Wshadow -pedantic -g -Werror=vla
 LIBS        = -lm -lpthread -lvulkan -lglfw
 
 DEFINES     = -DBURNER_VERSION_MAJOR=0 -DBURNER_VERSION_MINOR=0 -DBURNER_VERSION_PATCH=0

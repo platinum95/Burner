@@ -3,6 +3,7 @@
 #include "config.h"
 #include <stdlib.h>
 #include <string.h>
+#include "vkinstance.h"
 
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
@@ -17,7 +18,8 @@ struct PomIoCtx{
     bool initialised;
     uint16_t windowHeight, windowWidth;
     GLFWwindow *window;
-
+    bool surfaceInitialised;
+    VkSurfaceKHR renderSurface;
 };
 
 PomIoCtx pomIoCtx = { 0 };
@@ -114,5 +116,49 @@ bool pomIoShouldClose(){
 // Poll for IO events
 int pomIoPoll(){
     glfwPollEvents();
+    return 0;
+}
+
+// Create the rendering surface
+int pomIoCreateSurface(){
+    if( pomIoCtx.surfaceInitialised ){
+        LOG_WARN( "Surface already initialised" );
+    }
+    VkInstance *inst = pomGetVkInstance();
+    if( !inst ){
+        LOG_ERR( "Cannot create surface with uninitialised Vk Instance" );
+        return 1;
+    }
+    VkResult res = glfwCreateWindowSurface( *inst, pomIoCtx.window, NULL, &pomIoCtx.renderSurface );
+
+    if( res != VK_SUCCESS ){
+        LOG_ERR( "Failed to create render surface" );
+        return 1;
+    }
+    pomIoCtx.surfaceInitialised = true;
+    return 0;
+}
+
+// Get the render surface
+VkSurfaceKHR* pomIoGetSurface(){
+    if( !pomIoCtx.surfaceInitialised ){
+        LOG_ERR( "Attempting to get uninitialised render surface" );
+        return NULL;
+    }
+    return &pomIoCtx.renderSurface;
+}
+
+// Destroy the rendering surface
+int pomIoDestroySurface(){
+    if( !pomIoCtx.surfaceInitialised ){
+        LOG_ERR( "Attempting to destroy uninitialised render surface" );
+        return 1;
+    }
+    VkInstance *inst = pomGetVkInstance();
+    if( !inst ){
+        LOG_ERR( "Cannot destroy surface with uninitialised Vk Instance" );
+        return 1;
+    }
+    vkDestroySurfaceKHR( *inst, pomIoCtx.renderSurface, NULL );
     return 0;
 }
