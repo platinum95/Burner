@@ -4,4 +4,8 @@ int pomPickPhysicalDevice();
 
 int pomDestroyPhysicalDevice();
 
+int pomCreateLogicalDevice();
+
+int pomDestroyLogicalDevice();
+
 VkQueue * pomDeviceGetGraphicsQueue();

@@ -21,6 +21,9 @@ int pomIoCreateSurface();
 // Get the render surface
 VkSurfaceKHR* pomIoGetSurface();
 
+// Get the current window resolution
+const VkExtent2D *pomIoGetWindowExtent();
+
 // Destroy the rendering surface
 int pomIoDestroySurface();
 

@@ -12,6 +12,10 @@
 #define LOG_WARN( log, ... ) LOG_MODULE( WARN, vkdevice, log, ##__VA_ARGS__ )
 #define LOG_ERR( log, ... ) LOG_MODULE( ERR, vkdevice, log, ##__VA_ARGS__ )
 
+// TODO - improve requirement system to encapsulate all requirements in a single struct
+// TODO - improve requirement system to allow multiple devices
+// TODO - improve requirement system to have weak requirements
+
 typedef uint16_t (*VkQueueFeatureCheck)(VkPhysicalDevice*, uint32_t);
 
 typedef struct VkQueueFamilyRequirement VkQueueFamilyRequirement;
@@ -21,6 +25,10 @@ struct VkQueueFamilyRequirement{
     VkQueueFeatureCheck featureCheck;
     uint32_t minQueues;
     bool mayOverlap;
+};
+
+const char * const requiredExtensions[] = {
+    VK_KHR_SWAPCHAIN_EXTENSION_NAME
 };
 
 uint16_t gfxFeatureCheck( VkPhysicalDevice *_phyDev, uint32_t qIdx ){
@@ -36,17 +44,31 @@ uint16_t gfxFeatureCheck( VkPhysicalDevice *_phyDev, uint32_t qIdx ){
 }
 
 VkQueueFamilyRequirement queueFamRequirements[] = {
+    // Require a queue for graphics calls
     {
         .flags = VK_QUEUE_GRAPHICS_BIT,
         .minQueues = 1,
         .mayOverlap = true,
-        .featureCheck = &gfxFeatureCheck,
+        .featureCheck = NULL
+    },
+    // Require a presentation queue. May be the same
+    // as the graphics queue.
+    {
+        .flags = 0x0,
+        .minQueues = 1,
+        .mayOverlap = true,
+        .featureCheck = &gfxFeatureCheck
     }
 };
 
-
-
+// TODO - clean up all this struct stuff - maybe converge some of them
 typedef struct VkQueueFamilyRequirementsCtx VkQueueFamilyRequirementsCtx;
+typedef struct VkQueueFamilyCtx VkQueueFamilyCtx;
+typedef struct VkQueueFamilyRequirementFound VkQueueFamilyRequirementFound;
+typedef struct VkPhysicalDeviceCtx VkPhysicalDeviceCtx;
+typedef struct VkDeviceCtx VkDeviceCtx;
+typedef struct SwapchainInfo SwapchainInfo;
+
 struct VkQueueFamilyRequirementsCtx{
     VkQueueFamilyRequirement *queueFamilyRequirements;
     uint32_t numRequirements;
@@ -57,37 +79,128 @@ VkQueueFamilyRequirementsCtx queueFamilyRequirementsCtx = {
     .queueFamilyRequirements = queueFamRequirements
 };
 
-typedef struct VkQueueFamilyCtx VkQueueFamilyCtx;
 struct VkQueueFamilyCtx{
     VkQueueFamilyProperties *queueFamilyProperties;
     uint32_t numFamilies;
 };
 
-typedef struct VkQueueFamilyRequirementFound VkQueueFamilyRequirementFound;
 struct VkQueueFamilyRequirementFound{
     bool found;
     uint32_t reqIdx;
     uint32_t devQueueIdx;
 };
 
-typedef struct VkPhysicalDeviceCtx VkPhysicalDeviceCtx;
+struct SwapchainInfo{
+    VkSurfaceCapabilitiesKHR surfaceCaps;
+    VkSurfaceFormatKHR *surfaceFormats;
+    VkPresentModeKHR *presentModes;
+
+    VkSurfaceFormatKHR chosenSurfaceFormat;
+    VkPresentModeKHR chosenPresentMode;
+    VkExtent2D extent;
+
+    VkSwapchainKHR swapchain;
+
+    bool initialised;
+};
+
 struct VkPhysicalDeviceCtx{
     VkPhysicalDevice phyDev;
     VkPhysicalDeviceFeatures phyDevFeatures;
     VkPhysicalDeviceProperties phyDevProps;
     VkQueueFamilyCtx queueFamiliesCtx;
     VkQueueFamilyRequirementFound queueReqFound[ sizeof( queueFamRequirements ) / sizeof( VkQueueFamilyRequirement ) ];
+    SwapchainInfo swapchainInfo;
 };
 
-typedef struct VkDeviceCtx VkDeviceCtx;
 struct VkDeviceCtx{
-    bool initialised;
+    bool phyDeviceCreated;
+    bool logicalDeviceCreated;
     VkPhysicalDeviceCtx physicalDeviceCtx;
     VkDevice logicalDevice;
     VkQueue mainGfxQueue;
 };
 
 VkDeviceCtx vkDeviceCtx = { 0 };
+
+static uint16_t swapchainEligibility( VkPhysicalDeviceCtx *_phyDevCtx ){
+
+    VkSurfaceKHR *surface = pomIoGetSurface();
+    VkPhysicalDevice *phyDev = &_phyDevCtx->phyDev;
+    // Get surface capabilities
+    VkSurfaceCapabilitiesKHR *surfaceCaps = &_phyDevCtx->swapchainInfo.surfaceCaps;
+    vkGetPhysicalDeviceSurfaceCapabilitiesKHR( *phyDev, *surface, surfaceCaps );
+
+    // Get surface formats
+    VkSurfaceFormatKHR *surfaceFormats = _phyDevCtx->swapchainInfo.surfaceFormats;
+    uint32_t numFormats;
+    vkGetPhysicalDeviceSurfaceFormatsKHR( *phyDev, *surface, &numFormats, NULL );
+    if( !numFormats ){
+        // No available surface formats, return
+        return 0;
+    }
+    surfaceFormats = (VkSurfaceFormatKHR*) malloc( sizeof( VkSurfaceFormatKHR ) * numFormats );
+    vkGetPhysicalDeviceSurfaceFormatsKHR( *phyDev, *surface, &numFormats, surfaceFormats );
+
+    VkPresentModeKHR *presentModes = _phyDevCtx->swapchainInfo.presentModes;
+    uint32_t numPresentModes;
+    vkGetPhysicalDeviceSurfacePresentModesKHR( *phyDev, *surface, &numPresentModes, NULL );
+    if( !numPresentModes ){
+        // No available presentation modes
+        free( surfaceFormats );
+        return 0;
+    }
+    presentModes = (VkPresentModeKHR*) malloc( sizeof( VkPresentModeKHR ) * numPresentModes );
+    vkGetPhysicalDeviceSurfacePresentModesKHR( *phyDev, *surface, &numPresentModes, presentModes );
+
+    // Choose a format
+    // TODO - improve format selection
+    VkSurfaceFormatKHR *chosenFormat = &surfaceFormats[ 0 ];;
+    for( uint32_t i = 0; i < numFormats; i++ ){
+        VkSurfaceFormatKHR *cFormat = &surfaceFormats[ i ];
+        if( cFormat->format == VK_FORMAT_B8G8R8A8_SRGB && 
+            cFormat->colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR ){
+            chosenFormat = cFormat;
+            break;
+        }
+    }
+
+    // Choose a presentation mode
+    // TODO - improve presentation mode selection
+    VkPresentModeKHR chosenPresentMode = VK_PRESENT_MODE_FIFO_KHR;
+    for( uint32_t i = 0; i < numPresentModes; i++ ){
+        VkPresentModeKHR cPresentMode = presentModes[ i ];
+        if( cPresentMode == VK_PRESENT_MODE_MAILBOX_KHR ){
+            chosenPresentMode = cPresentMode;
+        }
+    }
+
+    // Set the extent
+    VkExtent2D *chosenExtent = &_phyDevCtx->swapchainInfo.extent;
+    if( surfaceCaps->currentExtent.width != UINT32_MAX ){
+        // Swapchain extent must be set to surface resolution
+        *chosenExtent = surfaceCaps->currentExtent;
+    }else{
+        // Set swapchain extent to window resolution, bound by
+        // instance limits
+        VkExtent2D min = surfaceCaps->minImageExtent;
+        VkExtent2D max = surfaceCaps->maxImageExtent;
+        *chosenExtent = *pomIoGetWindowExtent();
+       
+        chosenExtent->width = chosenExtent->width > max.width ? 
+                                max.width : chosenExtent->width < min.width ?
+                                min.width : chosenExtent->width;
+        chosenExtent->height = chosenExtent->height > max.height ? 
+                                max.height : chosenExtent->height < min.height ?
+                                min.height : chosenExtent->height;
+    }
+
+    _phyDevCtx->swapchainInfo.chosenSurfaceFormat = *chosenFormat;
+    _phyDevCtx->swapchainInfo.chosenPresentMode = chosenPresentMode;
+    _phyDevCtx->swapchainInfo.initialised = true;
+
+    return 1;
+}
 
 
 // Return 0 if ineligible, and a score >0 if eligible
@@ -105,6 +218,39 @@ static uint16_t phyDeviceElgibility( VkPhysicalDeviceCtx *_phyDevCtx ){
     if( deviceProps->deviceType == VK_PHYSICAL_DEVICE_TYPE_VIRTUAL_GPU ){
         return 0;
     }
+    
+    // Search for required physical device extensions
+    uint32_t devExtCount;
+    vkEnumerateDeviceExtensionProperties( _phyDevCtx->phyDev, NULL, &devExtCount, NULL );
+    VkExtensionProperties *devExtProps = (VkExtensionProperties*) malloc( sizeof( VkExtensionProperties ) * devExtCount );
+    vkEnumerateDeviceExtensionProperties( _phyDevCtx->phyDev, NULL, &devExtCount, devExtProps );
+    bool extFound[ sizeof( requiredExtensions ) / sizeof( const char * const ) ] = { false };
+    for( uint32_t i = 0; i < sizeof( requiredExtensions ) / sizeof( const char * const ); i++ ){
+        const char * const reqStr = requiredExtensions[ i ];
+
+        for( uint32_t j = 0; j < devExtCount; j++ ){
+            const char * const extStr = devExtProps[ j ].extensionName;
+            if( strcmp( reqStr, extStr ) == 0 ){
+                extFound[ i ] = true;
+            }
+        }
+    }
+    for( uint32_t i = 0; i < sizeof( requiredExtensions ) / sizeof( const char * const ); i++ ){
+        if( !extFound[ i ] ){
+            LOG_WARN( "Required extension(s) not present for device" );
+            free( devExtProps );
+            return 0;
+        }
+    }
+    free( devExtProps );
+
+    // Check for swapchain support
+    uint16_t swapScore = swapchainEligibility( _phyDevCtx );
+
+    if( !swapScore ){
+        // Swapchain not eligible/not available
+        return 0;
+    }
 
     VkQueueFamilyRequirement *qReqs = queueFamilyRequirementsCtx.queueFamilyRequirements;
     // Loop for each queue family requirement
@@ -114,7 +260,7 @@ static uint16_t phyDeviceElgibility( VkPhysicalDeviceCtx *_phyDevCtx ){
 
         // Loop for each queue family in this device
         for( uint32_t qId = 0; qId < numQueueFamilies; qId++ ){
-            VkQueueFamilyProperties *qFamProp = &qProps[ i ];
+            VkQueueFamilyProperties *qFamProp = &qProps[ qId ];
             VkQueueFamilyRequirementFound *qFamFound = &_phyDevCtx->queueReqFound[ qId ];
             // Check for each requirement
 
@@ -155,7 +301,7 @@ static uint16_t phyDeviceElgibility( VkPhysicalDeviceCtx *_phyDevCtx ){
             return 0;
         }
     }
-    
+    score += 1;
     return score;
 }
 
@@ -239,6 +385,10 @@ int pomPickPhysicalDevice(){
             continue;
         }
         free( phyDevCtxs[ i ].queueFamiliesCtx.queueFamilyProperties );
+        if( phyDevCtxs[ i ].swapchainInfo.initialised ){
+            free( phyDevCtxs[ i ].swapchainInfo.surfaceFormats );
+            free( phyDevCtxs[ i ].swapchainInfo.presentModes );
+        }
     }
     // Now free the array of all contexts
     free( phyDevCtxs );
@@ -248,22 +398,57 @@ int pomPickPhysicalDevice(){
     // Make sure the config is set with our chosen device
     pomMapSet( &systemConfig.mapCtx, "vulkan_device_name", devCtx->phyDevProps.deviceName );
 
+
+    vkDeviceCtx.phyDeviceCreated = true;
+
+    free( phyDevices );
+    return 0;
+}
+
+int pomCreateLogicalDevice(){
     // At this point we have a physical device selected,
     // with a context for it that specifies the queue families
     // that are required and their indices.
     // Can remove duplicate indices as some requirements may
     // share a family.
+    // Work out the unique queues required
+    VkDeviceCtx *devCtx = &vkDeviceCtx;
+    VkPhysicalDeviceCtx *phyDevCtx = &devCtx->physicalDeviceCtx;
+    const int numReq = sizeof( queueFamRequirements ) / sizeof( VkQueueFamilyRequirement );
+    bool queueIdUnique[ sizeof( queueFamRequirements ) / sizeof( VkQueueFamilyRequirement ) ] = { true };
+    for( int i = 0; i < numReq; i++ ){
+        const VkQueueFamilyRequirementFound *queueReqFound = &phyDevCtx->queueReqFound[ i ];
+        uint32_t qIdx = queueReqFound->devQueueIdx;
+        for( int j = i+1; j < numReq; j++ ){
+            if( phyDevCtx->queueReqFound[ i ].devQueueIdx == qIdx ){
+                queueIdUnique[ j ] = false;
+            }
+        }
+    }
 
+    // TODO - queue lengths on requirement overlap
+    
     // Set up the logical device
     // First specify the queues to be created
-    // TODO - extend this to take the queue requirements into account - ie create the queues that were requested
     float queuePriority = 1.0f;
-    VkDeviceQueueCreateInfo vkCreateQueueInfo ={
-        .sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
-        .queueCount = 1,
-        .queueFamilyIndex = devCtx->queueReqFound[ 0 ].devQueueIdx,
-        .pQueuePriorities = &queuePriority
-    };
+    uint32_t queueFamilyCount = 0;
+    VkDeviceQueueCreateInfo vkQueueCreateInfoBlock[ sizeof( queueFamRequirements ) / sizeof( VkQueueFamilyRequirement ) ] = { { 0 } };
+    VkDeviceQueueCreateInfo * nextFreeQueueInfo = &vkQueueCreateInfoBlock[ 0 ];
+    for( int i = 0; i < numReq; i++ ){
+        const VkQueueFamilyRequirementFound *queueReqFound = &phyDevCtx->queueReqFound[ i ];
+        if( !queueIdUnique[ i ] ){
+            // No need to add this requirement's queue
+            continue;
+        }
+        nextFreeQueueInfo->sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+        nextFreeQueueInfo->queueCount = queueFamilyRequirementsCtx.queueFamilyRequirements[ queueReqFound->reqIdx ].minQueues;
+        nextFreeQueueInfo->queueFamilyIndex = queueReqFound->devQueueIdx;
+        nextFreeQueueInfo->pQueuePriorities = &queuePriority;
+        
+        queueFamilyCount++;
+        // Point to next queue info struct in the block
+        nextFreeQueueInfo = nextFreeQueueInfo + 1;
+    }
 
     // Now set up required device features
     // TODO - set this up properly
@@ -272,41 +457,104 @@ int pomPickPhysicalDevice(){
     // Now create the actual device
     VkDeviceCreateInfo vkDevCreateInfo = {
         .sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
-        .queueCreateInfoCount = 1,
-        .pQueueCreateInfos = &vkCreateQueueInfo,
+        .queueCreateInfoCount = queueFamilyCount,
+        .pQueueCreateInfos = vkQueueCreateInfoBlock,
         .pEnabledFeatures = &vkDeviceFeatures,
         .enabledLayerCount = 0,
-        .ppEnabledLayerNames = NULL
+        .ppEnabledLayerNames = NULL,
+        .enabledExtensionCount = sizeof( requiredExtensions ) / sizeof( const char * const ),
+        .ppEnabledExtensionNames = requiredExtensions
+
     };
     
-    VkResult devRes = vkCreateDevice( devCtx->phyDev, &vkDevCreateInfo, NULL, &vkDeviceCtx.logicalDevice );
+    VkResult devRes = vkCreateDevice( phyDevCtx->phyDev, &vkDevCreateInfo, NULL, &vkDeviceCtx.logicalDevice );
     if( devRes != VK_SUCCESS ){
         LOG_ERR( "Failed to create logical device" );
         return 1;
     }
     LOG( "Logical device created" );
-    vkGetDeviceQueue( vkDeviceCtx.logicalDevice, devCtx->queueReqFound[ 0 ].devQueueIdx, 0, &vkDeviceCtx.mainGfxQueue );
-    vkDeviceCtx.initialised = true;
+    vkGetDeviceQueue( vkDeviceCtx.logicalDevice, phyDevCtx->queueReqFound[ 0 ].devQueueIdx, 0, &vkDeviceCtx.mainGfxQueue );
 
-    free( phyDevices );
+    devCtx->logicalDeviceCreated = true;
+
+    // Now create the swapchain
+    SwapchainInfo *swapchainInfo = &vkDeviceCtx.physicalDeviceCtx.swapchainInfo;
+    const VkSurfaceCapabilitiesKHR *surfaceCaps = &swapchainInfo->surfaceCaps;
+    uint32_t imageCount = surfaceCaps->minImageCount + 1;
+    if( imageCount > surfaceCaps->maxImageCount && surfaceCaps->maxImageCount != 0 ){
+        imageCount = surfaceCaps->maxImageCount;
+    }
+
+    VkSwapchainCreateInfoKHR createSwapchain = { 0 };
+    createSwapchain.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
+    createSwapchain.surface = *pomIoGetSurface();
+    createSwapchain.minImageCount = imageCount;
+    createSwapchain.imageFormat = swapchainInfo->chosenSurfaceFormat.format;
+    createSwapchain.imageColorSpace = swapchainInfo->chosenSurfaceFormat.colorSpace;
+    createSwapchain.imageExtent = swapchainInfo->extent;
+    createSwapchain.imageArrayLayers = 1;
+    createSwapchain.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+    createSwapchain.preTransform = surfaceCaps->currentTransform;
+    createSwapchain.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
+    createSwapchain.presentMode = swapchainInfo->chosenPresentMode;
+    createSwapchain.clipped = VK_TRUE;
+    createSwapchain.oldSwapchain = VK_NULL_HANDLE;
+
+    // Check if we need concurrent access to this swapchain
+    // TODO - do a proper check instead of just checking 1st and 2nd indices
+    VkQueueFamilyRequirementFound *queueReqFound = &vkDeviceCtx.physicalDeviceCtx.queueReqFound[ 0 ];
+    uint32_t queueFamilyIndices[] = { queueReqFound[ 0 ].devQueueIdx, queueReqFound[ 1 ].devQueueIdx };
+    if( queueIdUnique[ 0 ] && queueIdUnique[ 1 ] ){
+        // Swapchain will be accessed from 2 different queue families
+        createSwapchain.imageSharingMode = VK_SHARING_MODE_CONCURRENT;
+        createSwapchain.queueFamilyIndexCount = 2;
+        createSwapchain.pQueueFamilyIndices = queueFamilyIndices;
+    }else{
+        // Swapchain will be accessed from a single queue family
+        createSwapchain.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
+        createSwapchain.queueFamilyIndexCount = 0;
+        createSwapchain.pQueueFamilyIndices = NULL;    
+    }
+
+    if( vkCreateSwapchainKHR( vkDeviceCtx.logicalDevice,
+                              &createSwapchain, NULL,
+                              &swapchainInfo->swapchain ) != VK_SUCCESS ){
+        LOG_ERR( "Unable to create swapchain" );
+        return 1;
+    }
+
     return 0;
 }
+
 
 VkQueue * pomDeviceGetGraphicsQueue(){
     
     return &vkDeviceCtx.mainGfxQueue;
 }
 
+int pomDestroyLogicalDevice(){
+    if( !vkDeviceCtx.logicalDeviceCreated ){
+        LOG_WARN( "Trying to destroy uninitialised logical device" );
+        return 1;
+    }
+
+    vkDestroyDevice( vkDeviceCtx.logicalDevice, NULL );
+
+    vkDeviceCtx.logicalDeviceCreated = false;
+
+    return 0;
+}
+
 int pomDestroyPhysicalDevice(){
-    if( !vkDeviceCtx.initialised ){
+    if( !vkDeviceCtx.phyDeviceCreated ){
         LOG_WARN( "Trying to destroy uninitiated device" );
         return 1;
     }
-    vkDestroyDevice( vkDeviceCtx.logicalDevice, NULL );
+    
     
     // Destroy the surface that we may have initialised
     pomIoDestroySurface();
 
-    vkDeviceCtx.initialised = false;
+    vkDeviceCtx.phyDeviceCreated = false;
     return 0;
 }

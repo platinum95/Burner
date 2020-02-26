@@ -16,7 +16,7 @@ typedef struct PomIoCtx PomIoCtx;
 
 struct PomIoCtx{
     bool initialised;
-    uint16_t windowHeight, windowWidth;
+    VkExtent2D windowExtent;
     GLFWwindow *window;
     bool surfaceInitialised;
     VkSurfaceKHR renderSurface;
@@ -71,10 +71,15 @@ int pomIoInit(){
         sprintf( buf, "%u", height );
         pomMapSet( &systemConfig.mapCtx, "window_height", buf );
     }
-
+    
     // Create the GLFW context
     pomIoCtx.window = glfwCreateWindow( width, height, BURNER_NAME, NULL, NULL );
-    
+
+    pomIoCtx.windowExtent = (VkExtent2D){
+        .width = width,
+        .height = height
+    };
+
     pomIoCtx.initialised = true;
     return 0;
 }
@@ -105,6 +110,10 @@ const char ** pomIoGetWindowExtensions( uint32_t * _ecount ){
         return NULL;
     }
     return glfwGetRequiredInstanceExtensions( _ecount );
+}
+
+const VkExtent2D *pomIoGetWindowExtent(){
+    return &pomIoCtx.windowExtent;
 }
 
 
