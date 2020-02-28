@@ -532,6 +532,11 @@ VkQueue * pomDeviceGetGraphicsQueue(){
     return &vkDeviceCtx.mainGfxQueue;
 }
 
+VkDevice * pomGetLogicalDevice(){
+    // TODO - error check here
+    return &vkDeviceCtx.logicalDevice;
+}
+
 int pomDestroyLogicalDevice(){
     if( !vkDeviceCtx.logicalDeviceCreated ){
         LOG_WARN( "Trying to destroy uninitialised logical device" );

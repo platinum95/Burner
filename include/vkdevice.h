@@ -9,3 +9,5 @@ int pomCreateLogicalDevice();
 int pomDestroyLogicalDevice();
 
 VkQueue * pomDeviceGetGraphicsQueue();
+
+VkDevice * pomGetLogicalDevice();
