@@ -49,10 +49,11 @@ static int pomCreateShaderModule( VkShaderModule *_module, const char *_shaderPa
         return 1;
     }
 
-    VkShaderModuleCreateInfo moduleInfo;
-    moduleInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
-    moduleInfo.codeSize = shaderSize;
-    moduleInfo.pCode = shaderData;
+    VkShaderModuleCreateInfo moduleInfo = {
+        .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
+        .codeSize = shaderSize,
+        .pCode = shaderData
+    };
 
     int err = 0;
     if( vkCreateShaderModule( *_dev, &moduleInfo, NULL, _module ) != VK_SUCCESS ){
@@ -65,8 +66,8 @@ static int pomCreateShaderModule( VkShaderModule *_module, const char *_shaderPa
 }
 
 int pomShaderCreate( ShaderInfo *_shaderInfo ){
-    if( !_shaderInfo->vertexShaderPath ){
-        LOG( ERR, "Shader requires vertex stage" );
+    if( !_shaderInfo->vertexShaderPath || !_shaderInfo->fragmentShaderPath ){
+        LOG( ERR, "Shader requires vertex and fragment stages" );
         return 1;
     }
     VkDevice * dev = pomGetLogicalDevice();

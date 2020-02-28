@@ -6,6 +6,7 @@
 #include "common.h"
 #include "vkinstance.h"
 #include "vkdevice.h"
+#include "vkpipeline.h"
 
 // Just going to use debug level for now
 #define LOG( log, ... ) LOG_MODULE( DEBUG, main, log, ##__VA_ARGS__ )
@@ -42,7 +43,28 @@ int main( int argc, char ** argv ){
     if( pomPickPhysicalDevice() ){
         LOG( "Error in physical device creation" );
     }
+    LOG( "Create logical device" );
+    if( pomCreateLogicalDevice() ){
+        LOG( "Failed to create logical device" );
+    }
 
+    LOG( "Create shaders" );
+    ShaderInfo basicShaders = {
+        .vertexShaderPath = "./res/shaders/basicV.vert.spv",
+        .fragmentShaderPath = "./res/shaders/basicV.vert.spv"
+    };
+    if( pomShaderCreate( &basicShaders ) ){
+        LOG( "Failed to create shaders" );
+    }
+    LOG( "Destroy shaders" );
+    if( pomShaderDestroy( &basicShaders ) ){
+        LOG( "Failed to destroy shaders" );
+    }
+
+    LOG( "Destroy logical device" );
+    if( pomDestroyLogicalDevice() ){
+        LOG( "Failed to create logical device" );
+    }
     LOG( "Destroy device" )
     if( pomDestroyPhysicalDevice() ){
         LOG( "Error in destroying device" );
