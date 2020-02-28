@@ -15,9 +15,9 @@ static uint32_t * pomLoadShaderData( const char * _path, size_t *_size ){
         return NULL;
     }
 
-    fseek( shaderFile, SEEK_END, 0 );
+    fseek( shaderFile, 0, SEEK_END );
     size_t fSize = ftell( shaderFile );
-    fseek( shaderFile, SEEK_SET, 0 );
+    fseek( shaderFile, 0, SEEK_SET );
 
     if( !fSize ){
         LOG( WARN, "Shader file read as empty" );
