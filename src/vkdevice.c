@@ -526,10 +526,17 @@ int pomCreateLogicalDevice(){
     return 0;
 }
 
+VkFormat * pomGetSwapchainImageFormat(){
+    return &vkDeviceCtx.physicalDeviceCtx.swapchainInfo.chosenSurfaceFormat.format;
+}
 
-VkQueue * pomDeviceGetGraphicsQueue(){
-    
+
+VkQueue * pomDeviceGetGraphicsQueue(){   
     return &vkDeviceCtx.mainGfxQueue;
+}
+
+VkExtent2D * pomGetSwapchainExtent(){
+    return &vkDeviceCtx.physicalDeviceCtx.swapchainInfo.extent;
 }
 
 VkDevice * pomGetLogicalDevice(){
@@ -543,6 +550,7 @@ int pomDestroyLogicalDevice(){
         return 1;
     }
 
+    vkDestroySwapchainKHR( vkDeviceCtx.logicalDevice, vkDeviceCtx.physicalDeviceCtx.swapchainInfo.swapchain, NULL );
     vkDestroyDevice( vkDeviceCtx.logicalDevice, NULL );
 
     vkDeviceCtx.logicalDeviceCreated = false;

@@ -11,3 +11,7 @@ int pomDestroyLogicalDevice();
 VkQueue * pomDeviceGetGraphicsQueue();
 
 VkDevice * pomGetLogicalDevice();
+
+VkFormat * pomGetSwapchainImageFormat();
+
+VkExtent2D * pomGetSwapchainExtent();

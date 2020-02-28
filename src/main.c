@@ -51,10 +51,32 @@ int main( int argc, char ** argv ){
     LOG( "Create shaders" );
     ShaderInfo basicShaders = {
         .vertexShaderPath = "./res/shaders/basicV.vert.spv",
-        .fragmentShaderPath = "./res/shaders/basicV.vert.spv"
+        .fragmentShaderPath = "./res/shaders/basicF.frag.spv"
     };
     if( pomShaderCreate( &basicShaders ) ){
         LOG( "Failed to create shaders" );
+    }
+    VkRenderPass renderPass;
+    LOG( "Create RenderPass" );
+    if( pomRenderPassCreate( &renderPass ) ){
+        LOG( "Failed to create RenderPass" );
+    }
+    PomPipelineCtx pipelineCtx={
+        .pipelineType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO
+    };
+    LOG( "Create Pipeline" );
+    if( pomPipelineCreate( &pipelineCtx, &basicShaders, &renderPass ) ){
+        LOG( "Failed to create Pipeline" );
+    }
+
+
+    LOG( "Destroy Pipeline" );
+    if( pomPipelineDestroy( &pipelineCtx ) ){
+        LOG( "Failed to destroy pipeline" );
+    }
+    LOG( "Destroy RenderPass" );
+    if( pomRenderPassDestroy( &renderPass ) ){
+        LOG( "Failed to destroy RenderPass" );
     }
     LOG( "Destroy shaders" );
     if( pomShaderDestroy( &basicShaders ) ){
