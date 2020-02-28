@@ -54,10 +54,14 @@ static int pomCreateShaderModule( VkShaderModule *_module, const char *_shaderPa
     moduleInfo.codeSize = shaderSize;
     moduleInfo.pCode = shaderData;
 
-    vkCreateShaderModule( *_dev, &moduleInfo, NULL, _module );
+    int err = 0;
+    if( vkCreateShaderModule( *_dev, &moduleInfo, NULL, _module ) != VK_SUCCESS ){
+        LOG( ERR, "Failed to create shader module for %s", _shaderPath );
+        err = 1;
+    }
 
     free( shaderData );
-    return 0;
+    return err;
 }
 
 int pomShaderCreate( ShaderInfo *_shaderInfo ){
