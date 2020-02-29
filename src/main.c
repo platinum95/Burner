@@ -7,6 +7,7 @@
 #include "vkinstance.h"
 #include "vkdevice.h"
 #include "vkpipeline.h"
+#include "vkpresentation.h"
 
 // Just going to use debug level for now
 #define LOG( log, ... ) LOG_MODULE( DEBUG, main, log, ##__VA_ARGS__ )
@@ -68,8 +69,15 @@ int main( int argc, char ** argv ){
     if( pomPipelineCreate( &pipelineCtx, &basicShaders, &renderPass ) ){
         LOG( "Failed to create Pipeline" );
     }
+    LOG( "Create swapchain image views" );
+    if( pomSwapchainImageViewsCreate() ){
+        LOG( "Failed to create swapchain image views" );
+    }
 
-
+    LOG( "Destroy swapchain image views" );
+    if( pomSwapchainImageViewsDestroy() ){
+        LOG( "Failed to destroy swapchain image views" );
+    }
     LOG( "Destroy Pipeline" );
     if( pomPipelineDestroy( &pipelineCtx ) ){
         LOG( "Failed to destroy pipeline" );

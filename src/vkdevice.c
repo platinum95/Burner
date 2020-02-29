@@ -101,6 +101,9 @@ struct SwapchainInfo{
 
     VkSwapchainKHR swapchain;
 
+    VkImage *swapchainImages;
+    uint32_t numSwapchainImages;
+
     bool initialised;
 };
 
@@ -523,6 +526,18 @@ int pomCreateLogicalDevice(){
         return 1;
     }
 
+    // Now get the swapchain images
+    uint32_t numSwapchainImages = 0;
+    vkGetSwapchainImagesKHR( vkDeviceCtx.logicalDevice, swapchainInfo->swapchain,
+                             &numSwapchainImages, NULL );
+    if( !numSwapchainImages ){
+        LOG_ERR( "Could not get swapchain images" );
+        return 1;
+    }
+    swapchainInfo->swapchainImages = (VkImage*) malloc( sizeof( VkImage ) * numSwapchainImages );
+    vkGetSwapchainImagesKHR( vkDeviceCtx.logicalDevice, swapchainInfo->swapchain,
+                             &numSwapchainImages, swapchainInfo->swapchainImages );
+
     return 0;
 }
 
@@ -539,6 +554,16 @@ VkExtent2D * pomGetSwapchainExtent(){
     return &vkDeviceCtx.physicalDeviceCtx.swapchainInfo.extent;
 }
 
+VkImage * pomGetSwapchainImages( uint32_t *numImages ){
+    if( !vkDeviceCtx.physicalDeviceCtx.swapchainInfo.initialised ){
+        LOG_ERR( "Attempting to get uninitialised swapchain images" );
+        return NULL;
+    }
+    *numImages = vkDeviceCtx.physicalDeviceCtx.swapchainInfo.numSwapchainImages;
+    
+    return vkDeviceCtx.physicalDeviceCtx.swapchainInfo.swapchainImages;
+}
+
 VkDevice * pomGetLogicalDevice(){
     // TODO - error check here
     return &vkDeviceCtx.logicalDevice;
@@ -550,6 +575,7 @@ int pomDestroyLogicalDevice(){
         return 1;
     }
 
+    free( vkDeviceCtx.physicalDeviceCtx.swapchainInfo.swapchainImages );
     vkDestroySwapchainKHR( vkDeviceCtx.logicalDevice, vkDeviceCtx.physicalDeviceCtx.swapchainInfo.swapchain, NULL );
     vkDestroyDevice( vkDeviceCtx.logicalDevice, NULL );
 
