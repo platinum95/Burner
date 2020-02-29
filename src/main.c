@@ -8,6 +8,7 @@
 #include "vkdevice.h"
 #include "vkpipeline.h"
 #include "vkpresentation.h"
+#include "vkcommands.h"
 
 // Just going to use debug level for now
 #define LOG( log, ... ) LOG_MODULE( DEBUG, main, log, ##__VA_ARGS__ )
@@ -77,7 +78,28 @@ int main( int argc, char ** argv ){
     if( pomSwapchainFramebuffersCreate( &renderPass ) ){
         LOG( "Failed to create swapchain framebuffers" );
     }
+    LOG( "Create command pool" );
+    if( pomCommandPoolCreate() ){
+        LOG( "Failed to create command pool" );
+    }
+    LOG( "Create command buffers" );
+    if( pomCommandBuffersCreate() ){
+        LOG( "Failed to create command buffers" );
+    }
+    LOG( "Record default renderpass" );
+    if( pomRecordDefaultCommands( &renderPass, &pipelineCtx ) ){
+        LOG( "Failed to record default renderpass" );
+    }
 
+
+    LOG( "Destroy command buffers" );
+    if( pomCommandBuffersDestroy() ){
+        LOG( "Failed to destroy command buffers" );
+    }
+    LOG( "Destroy command pool" );
+    if( pomCommandPoolDestroy() ){
+        LOG( "Failed to destroy command pool" );
+    }
     LOG( "Destroy swapchain framebuffers" );
     if( pomSwapchainFramebuffersDestroy() ){
         LOG( "Failed to destroy swapchain framebuffers" );

@@ -538,6 +538,8 @@ int pomCreateLogicalDevice(){
     vkGetSwapchainImagesKHR( vkDeviceCtx.logicalDevice, swapchainInfo->swapchain,
                              &numSwapchainImages, swapchainInfo->swapchainImages );
 
+    swapchainInfo->numSwapchainImages = numSwapchainImages;
+
     return 0;
 }
 
@@ -546,7 +548,9 @@ VkFormat * pomGetSwapchainImageFormat(){
 }
 
 
-VkQueue * pomDeviceGetGraphicsQueue(){   
+VkQueue * pomDeviceGetGraphicsQueue( uint32_t *idx ){
+    // TODO - proper idx support
+    *idx = 0;
     return &vkDeviceCtx.mainGfxQueue;
 }
 

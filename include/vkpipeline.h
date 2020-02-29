@@ -1,3 +1,6 @@
+#ifndef VK_PIPELINE_H
+#define VK_PIPELINE_H
+
 #include <vulkan/vulkan.h>
 #include <stdbool.h>
 
@@ -40,3 +43,5 @@ int pomRenderPassDestroy( VkRenderPass *_renderPass );
 
 int pomPipelineCreate( PomPipelineCtx *_pipelineCtx, const ShaderInfo *_shaderInfo, VkRenderPass *_renderPass );
 int pomPipelineDestroy( PomPipelineCtx *_pipeline );
+
+#endif //VK_PIPELINE_H

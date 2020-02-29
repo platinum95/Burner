@@ -5,7 +5,8 @@
 #include <stdlib.h>
 
 // TODO - move swapchain creation from Device module to this module
-
+// TODO - make framebuffers/images/imageviews more generic and in their own modules
+// TODO - after above, use this module to create presentation-specific instances of the generic modules
 #define LOG( level, log, ... ) LOG_MODULE( level, vkpresentation, log, ##__VA_ARGS__ )
 
 typedef struct SwapchainImageViews SwapchainImageViews;
@@ -24,8 +25,6 @@ struct SwapchainFramebuffers{
 
     bool initialised;
 };
-
-
 
 SwapchainImageViews swapchainImageViews = { 0 };
 SwapchainFramebuffers swapchainFramebuffers = { 0 };
@@ -130,14 +129,15 @@ int pomSwapchainFramebuffersCreate( VkRenderPass *_renderPass ){
     swapchainFramebuffers.framebuffers = (VkFramebuffer*) malloc( sizeof( VkFramebuffer ) * numFramebuffers );
 
     for( uint32_t i = 0; i < swapchainImageViews.numViews; i++ ){
-        VkFramebufferCreateInfo framebufferInfo;
-        framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
-        framebufferInfo.attachmentCount = 1;
-        framebufferInfo.pAttachments = (VkImageView[]){ swapchainImageViews.imageViews[ i ] };
-        framebufferInfo.height = height;
-        framebufferInfo.width = width;
-        framebufferInfo.renderPass = *_renderPass;
-        framebufferInfo.layers = 1;
+        VkFramebufferCreateInfo framebufferInfo = {
+            .sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
+            .attachmentCount = 1,
+            .pAttachments = (VkImageView[]){ swapchainImageViews.imageViews[ i ] },
+            .height = height,
+            .width = width,
+            .renderPass = *_renderPass,
+            .layers = 1
+        };
 
         if( vkCreateFramebuffer( *dev, &framebufferInfo, NULL, &swapchainFramebuffers.framebuffers[ i ] ) != VK_SUCCESS ){
             LOG( ERR, "Could not create swapchain framebuffer" );
@@ -172,4 +172,14 @@ int pomSwapchainFramebuffersDestroy(){
     }
     swapchainFramebuffers.initialised = false;
     return 0;
+}
+
+VkFramebuffer *pomSwapchainFramebuffersGet( uint32_t *numBuffers ){
+    if( !swapchainFramebuffers.initialised ){
+        LOG( ERR, "Attempting to fetch uninitialised swapchain framebuffers" );
+        return NULL;
+    }
+
+    *numBuffers = swapchainFramebuffers.numFramebuffers;
+    return swapchainFramebuffers.framebuffers;
 }
