@@ -1,13 +1,15 @@
 #include "vkpresentation.h"
 #include "common.h"
 #include "vkdevice.h"
-#include <vulkan/vulkan.h>
 #include <stdbool.h>
 #include <stdlib.h>
+
+// TODO - move swapchain creation from Device module to this module
 
 #define LOG( level, log, ... ) LOG_MODULE( level, vkpresentation, log, ##__VA_ARGS__ )
 
 typedef struct SwapchainImageViews SwapchainImageViews;
+typedef struct SwapchainFramebuffers SwapchainFramebuffers;
 
 struct SwapchainImageViews{
     VkImageView *imageViews;
@@ -16,7 +18,17 @@ struct SwapchainImageViews{
     bool initialised;
 };
 
+struct SwapchainFramebuffers{
+    VkFramebuffer * framebuffers;
+    uint32_t numFramebuffers;
+
+    bool initialised;
+};
+
+
+
 SwapchainImageViews swapchainImageViews = { 0 };
+SwapchainFramebuffers swapchainFramebuffers = { 0 };
 
 int pomSwapchainImageViewsCreate(){
     if( swapchainImageViews.initialised ){
@@ -87,5 +99,77 @@ int pomSwapchainImageViewsDestroy(){
 
     free( swapchainImageViews.imageViews );
     swapchainImageViews.initialised = false;
+    return 0;
+}
+
+
+int pomSwapchainFramebuffersCreate( VkRenderPass *_renderPass ){
+    VkDevice * dev = pomGetLogicalDevice();
+    if( !dev ){
+        LOG( ERR, "Attempting to create framebuffer with no available logical device" );
+        return 1;
+    }
+    if( swapchainFramebuffers.initialised ){
+        LOG( WARN, "Swapchain framebuffer already initialised" );
+        return 1;
+
+    }
+    if( !swapchainImageViews.initialised ){
+        // Initialise the swapchain imageviews before we create the framebuffers
+        if( pomSwapchainImageViewsCreate() ){
+            return 1;
+        }
+    }
+
+    VkExtent2D *swapchainExtent = pomGetSwapchainExtent();
+    uint32_t width = swapchainExtent->width;
+    uint32_t height = swapchainExtent->height;
+
+    uint32_t numFramebuffers = swapchainImageViews.numViews;
+    swapchainFramebuffers.numFramebuffers = numFramebuffers;
+    swapchainFramebuffers.framebuffers = (VkFramebuffer*) malloc( sizeof( VkFramebuffer ) * numFramebuffers );
+
+    for( uint32_t i = 0; i < swapchainImageViews.numViews; i++ ){
+        VkFramebufferCreateInfo framebufferInfo;
+        framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+        framebufferInfo.attachmentCount = 1;
+        framebufferInfo.pAttachments = (VkImageView[]){ swapchainImageViews.imageViews[ i ] };
+        framebufferInfo.height = height;
+        framebufferInfo.width = width;
+        framebufferInfo.renderPass = *_renderPass;
+        framebufferInfo.layers = 1;
+
+        if( vkCreateFramebuffer( *dev, &framebufferInfo, NULL, &swapchainFramebuffers.framebuffers[ i ] ) != VK_SUCCESS ){
+            LOG( ERR, "Could not create swapchain framebuffer" );
+            for( uint32_t j = 0; j < i; j++ ){
+                vkDestroyFramebuffer( *dev, swapchainFramebuffers.framebuffers[ j ], NULL );
+            }
+            free( swapchainFramebuffers.framebuffers );
+            return 1;
+        }
+    }
+
+    swapchainFramebuffers.initialised = true;
+    return 0;
+}
+
+int pomSwapchainFramebuffersDestroy(){
+    if( !swapchainFramebuffers.initialised ){
+        LOG( WARN, "Attempting to destroy uninitialised swapchain framebuffer" );
+        return 1;
+    }
+    // Destroy the swapchain image views since we may have created them
+    pomSwapchainImageViewsDestroy();
+
+    VkDevice * dev = pomGetLogicalDevice();
+    if( !dev ){
+        LOG( ERR, "Attempting to destroy framebuffer with no available logical device" );
+        return 1;
+    }
+
+    for( uint32_t i = 0; i < swapchainFramebuffers.numFramebuffers; i++ ){
+        vkDestroyFramebuffer( *dev, swapchainFramebuffers.framebuffers[ i ], NULL );
+    }
+    swapchainFramebuffers.initialised = false;
     return 0;
 }

@@ -73,7 +73,15 @@ int main( int argc, char ** argv ){
     if( pomSwapchainImageViewsCreate() ){
         LOG( "Failed to create swapchain image views" );
     }
+    LOG( "Create swapchain framebuffers" );
+    if( pomSwapchainFramebuffersCreate( &renderPass ) ){
+        LOG( "Failed to create swapchain framebuffers" );
+    }
 
+    LOG( "Destroy swapchain framebuffers" );
+    if( pomSwapchainFramebuffersDestroy() ){
+        LOG( "Failed to destroy swapchain framebuffers" );
+    }
     LOG( "Destroy swapchain image views" );
     if( pomSwapchainImageViewsDestroy() ){
         LOG( "Failed to destroy swapchain image views" );
