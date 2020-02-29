@@ -52,24 +52,22 @@ int main(){
 }
 
 void testConfig(){
-    SystemConfig sysConfig;
-    if( loadSystemConfig( "./config.ini", &sysConfig ) ){
+    if( loadSystemConfig( "./config.ini" ) ){
        // printf( "Error loading configuration file\n" );
     }
-
-    const char * testPath = pomMapGet( &sysConfig.mapCtx, "modelBasePath", "test" );
+    const char * testPath = pomMapGet( &systemConfig.mapCtx, "modelBasePath", "test" );
     if( testPath ){
         LOG( "Model base path: %s", testPath );
     }
 
-    pomMapSet( &sysConfig.mapCtx, "Delete", "Me" );
-    if( pomMapRemove( &sysConfig.mapCtx, "Delete" ) ){
+    pomMapSet( &systemConfig.mapCtx, "Delete", "Me" );
+    if( pomMapRemove( &systemConfig.mapCtx, "Delete" ) ){
         LOG( "Could not remove node" );
     }
 
-    saveSystemConfig( &sysConfig, "./testSave.ini" );
+    saveSystemConfig( "./testSave.ini" );
     
-    clearSystemConfig( &sysConfig );
+    clearSystemConfig();
 }
 
 void testHashmap(){
