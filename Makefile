@@ -63,6 +63,6 @@ clean:
 	rm -r $(OBJ_DIR) $(RES_DIR)
 
 # Make the obj directory
-$(info $(shell mkdir -p $(OBJ_DIR)))
-$(info $(shell mkdir -p $(RES_DIR)))
-$(info $(shell mkdir -p $(SHADER_OBJ_DIR)))
+$(shell mkdir -p $(OBJ_DIR))
+$(shell mkdir -p $(RES_DIR))
+$(shell mkdir -p $(SHADER_OBJ_DIR))
