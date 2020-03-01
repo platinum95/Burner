@@ -554,6 +554,12 @@ VkQueue * pomDeviceGetGraphicsQueue( uint32_t *idx ){
     return &vkDeviceCtx.mainGfxQueue;
 }
 
+VkQueue * pomDeviceGetPresentQueue( uint32_t *idx ){
+    // TODO - proper idx support
+    *idx = 0;
+    return &vkDeviceCtx.mainGfxQueue;
+}
+
 VkExtent2D * pomGetSwapchainExtent(){
     return &vkDeviceCtx.physicalDeviceCtx.swapchainInfo.extent;
 }
@@ -566,6 +572,14 @@ VkImage * pomGetSwapchainImages( uint32_t *numImages ){
     *numImages = vkDeviceCtx.physicalDeviceCtx.swapchainInfo.numSwapchainImages;
     
     return vkDeviceCtx.physicalDeviceCtx.swapchainInfo.swapchainImages;
+}
+
+VkSwapchainKHR * pomGetSwapchain(){
+    if( ! vkDeviceCtx.physicalDeviceCtx.swapchainInfo.initialised ){
+        LOG_ERR( "Attempting to get uninitialised swapchain" );
+        return NULL;
+    }
+    return &vkDeviceCtx.physicalDeviceCtx.swapchainInfo.swapchain;
 }
 
 VkDevice * pomGetLogicalDevice(){
@@ -593,7 +607,6 @@ int pomDestroyPhysicalDevice(){
         LOG_WARN( "Trying to destroy uninitiated device" );
         return 1;
     }
-    
     
     // Destroy the surface that we may have initialised
     pomIoDestroySurface();

@@ -198,15 +198,14 @@ int pomRenderPassCreate( VkRenderPass *_renderPass ){
         .pColorAttachments = &colorAttachmentRef
     };
 
-    /*
-    VkSubpassDependency dependency = {};
-    dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
-    dependency.dstSubpass = 0;
-    dependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-    dependency.srcAccessMask = 0;
-    dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-    dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-    */
+    VkSubpassDependency dependency = {
+        .srcSubpass = VK_SUBPASS_EXTERNAL,
+        .dstSubpass = 0,
+        .srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+        .srcAccessMask = 0,
+        .dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+        .dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT
+    };
 
     VkRenderPassCreateInfo renderPassInfo = {
         .sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
@@ -214,8 +213,8 @@ int pomRenderPassCreate( VkRenderPass *_renderPass ){
         .pAttachments = &colourAttachment,
         .subpassCount = 1,
         .pSubpasses = &subpass,
-    //  .dependencyCount = 1,
-    //  .pDependencies = &dependency
+        .dependencyCount = 1,
+        .pDependencies = &dependency
     };
 
     VkDevice *dev = pomGetLogicalDevice();

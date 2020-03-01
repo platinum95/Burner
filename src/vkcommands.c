@@ -119,6 +119,15 @@ int pomCommandBuffersDestroy(){
     return 0;
 }
 
+VkCommandBuffer *pomCommandBuffersGet( uint32_t *numBuffers ){
+    if( !commandsCtx.initialisedBuffers ){
+        LOG( ERR, "Attempting to get uninitialised command buffers" );
+        return NULL;
+    }
+    *numBuffers = commandsCtx.numBuffers;
+    return commandsCtx.commandBuffers;
+}
+
 int pomRecordDefaultCommands( VkRenderPass *_renderPass, PomPipelineCtx *_pipelineCtx ){
     if( !commandsCtx.initialisedBuffers ){
         LOG( ERR, "Attempting to record commands with uninitialised command buffers" );
