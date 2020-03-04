@@ -4,6 +4,11 @@
 #include <assimp/cimport.h>
 #include <assimp/postprocess.h>
 #include "pomModelFormat.h"
+#define STB_IMAGE_IMPLEMENTATION
+#define STBI_ONLY_PNG
+#include "stb_image.h"
+
+#include "hashmap.h"
 
 typedef struct SubModelCtx SubModelCtx;
 struct SubModelCtx{
@@ -47,12 +52,17 @@ int loadRawModel( const char *modelPath, struct aiScene const **_scene );
 int genSubmodel( const struct aiNode *_node, struct aiMesh **meshArray ); // Recursive
 int genMaterial( const struct aiMaterial *_material, uint32_t _matId );
 int genTextureCount( const struct aiScene *_scene );
+int getAllTextureSize( const struct aiScene *_scene, uint32_t *_textureCount,
+                       size_t *_allTextureDataSize, PomMapCtx *_texPathsMap );
 int genSubmodelCount( const struct aiScene *_scene );
 int getAllMeshSize( const struct aiScene *_scene, PomModelMeshInfo *meshInfos, size_t *_sizeBytes );
 int populateMeshData( const struct aiMesh *mesh, PomModelMeshInfo *meshInfo,
                       uint8_t *dataBlock, size_t *bytesWritten );
 
 uint8_t *meshDataBlock;
+
+const char *rawModelPath;
+const char *rawModelDir;
 
 int main( int argc, char ** argv ){
     if( argc != 2 ){
@@ -61,27 +71,41 @@ int main( int argc, char ** argv ){
         return 1;
     }
     int err = 0;
-    const char *modelPath = argv[ 1 ];
-    //printf( "%s\n", modelPath );
+    rawModelPath = argv[ 1 ];
+
+    // Load the model
     const struct aiScene *scene;
-    if( loadRawModel( modelPath, &scene ) ){
+    if( loadRawModel( rawModelPath, &scene ) ){
+        printf( "Failed to load input model file\n" );
         return 1;
     }
 
+    // Get model directory since paths within model will be relative to it.
+    // Amounts to getting everything up to the last separator
+    size_t pathLen = strlen( rawModelPath );
+    for( int32_t i = (int32_t) pathLen - 1; i >= 0 ; i-- ){
+        char c = rawModelPath[ i ];
+        if( c == '/' ){
+            size_t dirLen = (size_t) i;
+            char *dirVal = (char*) malloc( sizeof( char ) * dirLen + 2 );
+            memcpy( dirVal, rawModelPath, sizeof( char ) * ( dirLen + 1 ) );
+            dirVal[ dirLen + 1 ] = '\0';
+            rawModelDir = dirVal;
+            break;
+        } 
+    }
+    
     // Create mesh header structs
     PomModelMeshInfo *meshInfos = (PomModelMeshInfo*) malloc( sizeof( PomModelMeshInfo ) * scene->mNumMeshes );
 
     size_t meshBlockSize;
     if( getAllMeshSize( scene, meshInfos, &meshBlockSize ) ){
         printf( "ERR: Failed to get mesh block size\n" );
-        return 1;
+        err = 1;
+        goto meshInfoFailure;
     }
-
     printf( "Mesh block size %lu bytes\n", meshBlockSize );
-
     meshDataBlock = (uint8_t*) malloc( meshBlockSize );
-
-    
 
     // Populate mesh info
     size_t currOffsetBytes = 0;
@@ -90,73 +114,36 @@ int main( int argc, char ** argv ){
         const struct aiMesh *mesh = scene->mMeshes[ i ];
         size_t bytesWritten;
         if( populateMeshData( mesh, meshInfo, &meshDataBlock[ currOffsetBytes ], &bytesWritten ) ){
-            free( meshDataBlock );
-            free( meshInfos );
-            return 1;
+            err = 1;
+            goto meshPopulateError;
         }
         meshInfo->dataBlockOffset = &meshDataBlock[ currOffsetBytes ];
         meshInfo->meshId = i;
         currOffsetBytes += bytesWritten;
     }
+    // Check that we wrote the estimated amount of data
     if( currOffsetBytes != meshBlockSize ){
         printf( "Inconsistency between estimated mesh block size and bytes written. "
                 "Wrote %lu, expected %lu\n", currOffsetBytes, meshBlockSize );
-        free( meshDataBlock );
-        free( meshInfos );
-        return 1;
-    }
-    if( genTextureCount( scene ) ){
-        printf( "ERR: Could not get texture count\n" );
-        return 1;
-    }
-    printf( "Texture count: %i\n", textureCtxData.numTextures );
-
-    uint32_t numMaterial = scene->mNumMaterials;
-    materialCtx.numMaterial = numMaterial;
-    materialCtx.materialInfoBlock = (PomModelMaterialInfo*) malloc( sizeof( PomModelMaterialInfo ) * numMaterial );
-
-    for( uint32_t i = 0; i < scene->mNumMaterials; i++ ){
-        if( genMaterial( scene->mMaterials[ i ], i ) ){
-            printf( "ERR: Failed to load material %i\n", i );
-        }
-    }
-
-    struct aiNode *rootNode = scene->mRootNode;
-    if( genSubmodelCount( scene ) ){
-        printf( "ERR: failed to generate submodel data block\n" );
         err = 1;
-        goto submodelCountErr;
-    }
-    
-    if( rootNode->mNumMeshes && rootNode->mNumChildren ){
-        printf( "Root node is a mesh and has children. Not sure how to continue\n" );
-        return 0;
-    }
-    else if( rootNode->mNumMeshes ){
-        // Single node/mesh located at root
-        printf( "Single node/mesh located at root node\n" );
-    }
-    else{
-        // Multiple nodes/meshes. For now each node with meshes will be treated
-        // as a submodel, with root node being the model
-        
-        
+        goto meshPopulateError;
     }
 
-    // Free up allocated material memory.
-    // TODO - this should eventually be freed when the output file is being written
-    for( uint32_t i = 0; i < scene->mNumMaterials; i++ ){
-        // Discard const qualifer for the material string
-        free( (char*) materialCtx.materialInfoBlock[ i ].nameOffset );
-        free( materialCtx.materialInfoBlock[ i ].textureIdsOffset );
+    // Get texture count and block size
+    PomMapCtx texMap;
+    size_t texSize;
+    uint32_t texCount;
+    if( getAllTextureSize( scene, &texCount, &texSize, &texMap ) ){
+        printf( "ERR: Unable to get texture info\n" );
+        err = 1;
+        goto meshPopulateError;
     }
+    printf( "Texture count %u, texture size %lu bytes\n", texCount, texSize );
 
-submodelCountErr:
+meshPopulateError:
     free( meshDataBlock );
+meshInfoFailure:
     free( meshInfos );
-    free( materialCtx.materialInfoBlock );
-    free( textureCtxData.ctx );
-    free( textureCtxData.textureInfoBlock );
     return err;
 }
 
@@ -433,5 +420,63 @@ int genSubmodelCount( const struct aiScene *_scene ){
     submodelCtx.submodelInfo = (PomSubmodelInfo*) malloc( sizeof( PomSubmodelInfo ) * submodelCount );
     submodelCtx.submodelData = (struct aiNode const**) malloc( sizeof( struct aiNode* ) * submodelCount );
     submodelCtx.numSubmodels = submodelCount;
+    return 0;
+}
+
+int getAllTextureSize( const struct aiScene *_scene, uint32_t *_textureCount,
+                       size_t *_allTextureDataSize, PomMapCtx *_texPathsMap ){
+    uint32_t texCount = 0;
+    size_t texSize = 0;
+    if( pomMapInit( _texPathsMap, 0 ) ){
+        printf( "Failed to create texture path hashmap\n" );
+        return 1;
+    }
+    for( uint32_t i = 0; i < _scene->mNumMaterials; i++ ){
+        const struct aiMaterial *material = _scene->mMaterials[ i ];
+        for( uint32_t texType = 1; texType <= AI_TEXTURE_TYPE_MAX; texType++ ){
+            uint32_t matTexCount = aiGetMaterialTextureCount( material, texType );
+            texCount += matTexCount;
+            for( uint32_t texIdx = 0; texIdx < matTexCount; texIdx++ ){
+                struct aiString texPath;
+                enum aiTextureMapping texMapping;
+                unsigned int texUvIndex;
+                ai_real texBlend;
+                enum aiTextureOp texOp;
+                enum aiTextureMapMode texMapMope;
+                unsigned int texFlags;
+                aiGetMaterialTexture( material, texType, texIdx,
+                                      &texPath, &texMapping, &texUvIndex,
+                                      &texBlend, &texOp, &texMapMope, &texFlags );
+                // Check if we've already registered this texture
+                const char *pathExists = pomMapGet( _texPathsMap, texPath.data, NULL );
+                if( pathExists ){
+                    // Path has already been loaded
+                    continue;
+                }
+                // Path has not yet been loaded
+                pomMapSet( _texPathsMap, texPath.data, "1" );
+                // Get dir-relative path. Fair to assume that adding the dir wont cause the
+                // aiString to go OOB
+                size_t cPathLen = strlen( texPath.data );
+                size_t dirLen = strlen( rawModelDir );
+                char *newPathDest = &texPath.data[ dirLen ];
+                memmove( newPathDest, &texPath.data[ 0 ], cPathLen + 1 );
+                memcpy( &texPath.data, rawModelDir, dirLen );
+
+                int x, y, c;
+                if( !stbi_info( texPath.data, &x, &y, &c ) ){
+                    printf( "Failed to get texture information on file %s: %s\n", texPath.data, stbi_failure_reason() );
+                    return 1;
+                }
+                // Assume 8 bits per channel
+                texSize += ( x * y * c * sizeof( uint8_t ) );
+            }
+        }
+    }
+    int x, y, c;
+    stbi_uc *data = stbi_load( "test", &x, &y, &c, 0 );
+    stbi_image_free( data );
+    *_textureCount = texCount;
+    *_allTextureDataSize = texSize;
     return 0;
 }
