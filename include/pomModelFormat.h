@@ -1,7 +1,9 @@
 #include <stdint.h>
+#include <stddef.h>
 
 #define POM_FORMAT_MAGIC_NUM 0xDEADBEEFDEADBEEF
 
+// TODO - Verify cross-platform alignment on these structs
 typedef struct PomModelTextureInfo PomModelTextureInfo;
 typedef struct PomModelMaterialInfo PomModelMaterialInfo;
 typedef struct PomModelMeshInfo PomModelMeshInfo;
@@ -10,6 +12,13 @@ typedef struct PomModelInfo PomModelInfo;
 typedef struct PomModelFormat PomModelFormat;
 
 typedef uint8_t PomDataBlock;
+
+int relativisePointers( PomModelFormat *_format, uint8_t *_dataBlock );
+int absolutisePointers( PomModelFormat *_format );
+int writeBakedModel( PomModelFormat *_format, uint8_t *_dataBlock, size_t _blockSize,
+                     const char *filePath );
+int loadBakedModel( const char *_filePath, PomModelFormat **_format,
+                    uint8_t **_dataBlock );
 
 struct PomModelTextureInfo{
     uint32_t textureId;
@@ -25,7 +34,7 @@ struct PomModelMaterialInfo{
     uint32_t materialId;
     const char *nameOffset;
     uint64_t materialType; // Shading type
-    uint32_t paramDataOffset; // maybe replace this with struct
+    uint8_t *paramDataOffset; // maybe replace this with struct
     uint32_t numTextures;
     uint32_t *textureIdsOffset;
 };
@@ -56,17 +65,21 @@ struct PomModelInfo{
     const char *nameOffset;
     uint32_t numSubmodels;
     uint32_t *submodelIdsOffset;
-    uint64_t defaultMatrixOffset;
+    float *defaultMatrixOffset;
 };
 
 struct PomModelFormat{
 
     uint64_t magicNumber;
     const char *sceneNameOffset;
+    size_t dataBlockSize;
 
     uint32_t numTextureInfo;
     PomModelTextureInfo *textureInfoOffset;
     
+    uint32_t numMeshInfo;
+    PomModelMeshInfo *meshInfoOffset;
+
     uint32_t numMaterialInfo;
     PomModelMaterialInfo *materialInfoOffset;
 
@@ -75,7 +88,4 @@ struct PomModelFormat{
 
     uint32_t numModelInfo;
     PomModelInfo *modelInfo;
-    
-
-    PomDataBlock dataBlock;
 };

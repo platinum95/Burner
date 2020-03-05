@@ -10,44 +10,7 @@
 
 #include "hashmap.h"
 
-typedef struct SubModelCtx SubModelCtx;
-struct SubModelCtx{
-    PomSubmodelInfo *submodelInfo;
-    uint32_t numSubmodels;
-    uint32_t currIdx;
 
-    struct aiNode const **submodelData;
-} submodelCtx = { 0 };
-
-typedef struct MaterialCtx MaterialCtx;
-struct MaterialCtx{
-    PomModelMaterialInfo *materialInfoBlock;
-    uint32_t numMaterial;
-} materialCtx = { 0 };
-
-typedef struct TextureCtx TextureCtx;
-struct TextureCtx{  
-    struct aiString texPath;
-    enum aiTextureMapping texMapping;
-    unsigned int texUvIndex;
-    ai_real texBlend;
-    enum aiTextureOp texOp;
-    enum aiTextureMapMode texMapMope;
-    unsigned int texFlags;
-};
-
-struct TextureCtxData{
-    PomModelTextureInfo *textureInfoBlock;
-    TextureCtx *ctx;
-    uint32_t numTextures;
-    uint32_t currIdx;
-} textureCtxData = { 0 };
-
-// Static allocation for model data that will be written
-PomModelFormat modelOutput = { 0 };
-//const struct aiScene* scene = NULL;
-
-int writeBakedModel( const char *outputPath );
 int loadRawModel( const char *modelPath, struct aiScene const **_scene );
 
 static int getAllTextureSize( const struct aiScene *_scene, uint32_t *_textureCount,
@@ -68,13 +31,14 @@ const char *rawModelPath;
 const char *rawModelDir;
 
 int main( int argc, char ** argv ){
-    if( argc != 2 ){
-        printf( "modelbake requires a single path to a raw model file as argument,"
-                " e.g. modelbake ./model.dae\n" );
+    if( argc != 3 ){
+        printf( "modelbake requires a 2 paths as argument, first to raw input file and second to baked output file"
+                " e.g. modelbake ./model.dae ./model.pom\n" );
         return 1;
     }
     int err = 0;
     rawModelPath = argv[ 1 ];
+    const char *bakedModelPath = argv[ 2 ];
 
     // Load the model
     const struct aiScene *scene;
@@ -135,6 +99,7 @@ int main( int argc, char ** argv ){
         err = 1;
         goto getSizeError;
     }
+    size_t formatHeaderSizeBytes = sizeof( PomModelFormat );
     size_t modelInfoSizeBytes = ( sizeof( PomModelInfo ) * numModelInfos );
     size_t submodelIdArrayBlockSizeBytes = ( sizeof( uint32_t ) * numSubmodelIds );
     size_t modelDataBlockSizeBytes = modelInfoSizeBytes + submodelIdArrayBlockSizeBytes;
@@ -144,13 +109,19 @@ int main( int argc, char ** argv ){
     size_t meshInfoSize = sizeof( PomModelMeshInfo ) * scene->mNumMeshes;
     size_t texInfoSize = sizeof( PomModelTextureInfo ) * texCount;
 
-    size_t meshTexBlockSize = meshInfoSize + meshBlockSize + 
-                              texInfoSize + texSize + 
-                              materialBlockSize + modelDataBlockSizeBytes;
-    uint8_t *texMeshDataBlock = (uint8_t*) malloc( meshTexBlockSize );
+    size_t dataBlockSize = meshInfoSize + meshBlockSize +
+                           texInfoSize + texSize +
+                           materialBlockSize + modelDataBlockSizeBytes;
+    size_t totalModelFileSize = formatHeaderSizeBytes + dataBlockSize;
+                              
+    uint8_t *totalModelDataBlock = (uint8_t*) malloc( totalModelFileSize );
     // Accumulator makes it easier to later add blocks between existing ones
-    uint8_t *dataBlockAccum = texMeshDataBlock;
+    uint8_t *dataBlockAccum = totalModelDataBlock;
 
+    PomModelFormat *format = (PomModelFormat*) dataBlockAccum;
+    dataBlockAccum += formatHeaderSizeBytes;
+
+    uint8_t *dataBlockStart = dataBlockAccum;
     PomModelMeshInfo *meshInfos = (PomModelMeshInfo*) dataBlockAccum;
     dataBlockAccum += meshInfoSize;
 
@@ -166,11 +137,27 @@ int main( int argc, char ** argv ){
     uint32_t *submodelIdsArrayBlock = (uint32_t*) dataBlockAccum;
     dataBlockAccum += submodelIdArrayBlockSizeBytes;
 
-    uint8_t *meshDataBlock = (uint8_t*)texInfos + texInfoSize;
+    uint8_t *meshDataBlock = (uint8_t*)dataBlockAccum;
     dataBlockAccum += meshBlockSize;
 
-    uint8_t *textureBlock = meshDataBlock + meshBlockSize;
+    uint8_t *textureBlock = dataBlockAccum;
     dataBlockAccum += texSize;
+
+    *format = (PomModelFormat){
+        .magicNumber = POM_FORMAT_MAGIC_NUM,
+        .sceneNameOffset = NULL,
+        .dataBlockSize = dataBlockSize,
+        .numTextureInfo = texCount,
+        .textureInfoOffset = texInfos,
+        .numMeshInfo = scene->mNumMeshes,
+        .meshInfoOffset = meshInfos,
+        .numMaterialInfo = scene->mNumMaterials,
+        .materialInfoOffset = (PomModelMaterialInfo*) materialDataBlock,
+        .numSubmodelInfo = 0,
+        .submodelInfo = NULL,
+        .numModelInfo = numModelInfos,
+        .modelInfo = modelInfoDataBlock
+    };
 
     // Populate mesh info
     printf( "Populate mesh info\n" );
@@ -211,6 +198,11 @@ int main( int argc, char ** argv ){
     printf( "Write material info block data\n" );
     size_t materialDataWritten;
     if( populateMaterialInfo( scene, materialDataBlock, &materialDataWritten ) ){
+        printf( "Failed to populate material data\n" );
+        err = 1;
+        goto populateDataFailure;
+    }
+        if( texBytesWritten != texSize ){
         printf( "Inconsistency in material bytes written and expected material block size\n" );
         err = 1;
         goto populateDataFailure;
@@ -220,7 +212,7 @@ int main( int argc, char ** argv ){
     size_t modelInfoDataWritten;    
     if( populateModelInfo( scene, modelInfoDataBlock, 
                            submodelIdsArrayBlock, &modelInfoDataWritten ) ){
-        printf( "Inconsistency in model info bytes written and expected block size\n" );
+        printf( "Failed to populate model data\n" );
         err = 1;
         goto populateDataFailure;
     }
@@ -230,9 +222,33 @@ int main( int argc, char ** argv ){
         goto populateDataFailure;
     }
 
+    if( writeBakedModel( format, dataBlockStart, dataBlockSize, bakedModelPath ) ){
+        printf( "Failed to write output file\n" );
+        goto populateDataFailure;
+    }
+
+#ifdef SANITY_CHECK_MODEL
+    // Quick test on loading models
+    PomModelFormat *loadedModel;
+    uint8_t *loadedDataBlock;
+    if( loadBakedModel( bakedModelPath, &loadedModel, &loadedDataBlock ) ){
+        printf( "Failed to reload model" );
+        err = 1;
+        goto populateDataFailure;
+    }
+    // Relativise loaded model
+    relativisePointers( loadedModel, loadedDataBlock );
+    if( memcmp( loadedModel, format, totalModelFileSize ) != 0 ){
+        printf( "File comparison failed" );
+        free( loadedModel );
+        err = 1;
+        goto populateDataFailure;
+    }
+    free( loadedModel );
+#endif // SANITY_CHECK_MODEL
 
 populateDataFailure:
-    free( texMeshDataBlock );
+    free( totalModelDataBlock );
 getSizeError:
     return err;
 }
@@ -247,6 +263,7 @@ int loadRawModel( const char *modelPath, struct aiScene const **_scene ){
 
     return 0;
 }
+
 
 /*
     unsigned int mPrimitiveTypes;
@@ -409,7 +426,7 @@ int populateMaterialInfo( const struct aiScene *_scene, uint8_t *_matDataBlock,
                           size_t *_bytesWritten ){
     struct aiMaterial ** const materials = _scene->mMaterials;
 
-    size_t materialInfosSize = sizeof( PomModelMaterialInfo ) * _scene->mNumMeshes;
+    size_t materialInfosSize = sizeof( PomModelMaterialInfo ) * _scene->mNumMaterials;
     
     PomModelMaterialInfo *materialInfos = (PomModelMaterialInfo*) _matDataBlock;
     uint32_t *texIdArrays = (uint32_t*) ( _matDataBlock + materialInfosSize );
@@ -560,6 +577,7 @@ int populateTextureData( const struct aiScene *_scene, uint8_t *_texDataBlock,
                 uintptr_t ptrVal = (uintptr_t) currFreeTexBlock;
                 sprintf( buff, "%lu", ptrVal );    // Also gross - TODO - change this
                 pomMapSet( &texMapCtx, texPath.data, &buff[ 0 ] );
+                currInfo->dataOffset = currFreeTexBlock;
                 currFreeTexBlock += texSize;
                 bytesWritten += texSize;
                 stbi_image_free( imgData );
