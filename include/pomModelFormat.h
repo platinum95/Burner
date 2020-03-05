@@ -18,7 +18,7 @@ struct PomModelTextureInfo{
     uint64_t dataType;  // Colour, vector, data, etc (largely unimportant)
     uint32_t dataUnitSizeBytes; // vec2 vs vec4 etc
     uint32_t dataBlockSizeBytes;
-    uint64_t dataOffset;
+    uint8_t *dataOffset;
 };
 
 struct PomModelMaterialInfo{
