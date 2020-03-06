@@ -1,0 +1,3 @@
+[submodule "CMore"]
+	path = CMore
+	url = git@github.com:platinum95/CMore.git
