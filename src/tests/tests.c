@@ -1,11 +1,11 @@
 #include <stdio.h>
-#include "hashmap.h"
+#include "cmore/hashmap.h"
 #include "common.h"
 #include "config.h"
 #include "tests.h"
-#include "queue.h"
+#include "cmore/queue.h"
 #include <stdlib.h>
-#include "threadpool.h"
+#include "cmore/threadpool.h"
 #include <time.h>
 
 // Allow default config path to be overruled by compile option

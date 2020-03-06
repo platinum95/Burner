@@ -1,5 +1,5 @@
 #include <stdbool.h>
-#include "hashmap.h"
+#include "cmore/hashmap.h"
 
 typedef struct SystemConfig SystemConfig;
 

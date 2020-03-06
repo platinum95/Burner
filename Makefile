@@ -1,13 +1,13 @@
 CC          = gcc
 GLSLC       = glslc
-INCLUDES    = $(PWD)/include
-CFLAGS      = -I$(INCLUDES) -O0 -Wall -Werror -Wextra -Wformat=2 -Wshadow -pedantic -g -Werror=vla
+INCLUDES    = -I$(PWD)/include -I$(PWD)/CMore/
+CFLAGS      = $(INCLUDES) -O0 -Wall -Werror -Wextra -Wformat=2 -Wshadow -pedantic -g -Werror=vla
 LIBS        = -lm -lpthread -lvulkan -lglfw
 
 DEFINES     = -DBURNER_VERSION_MAJOR=0 -DBURNER_VERSION_MINOR=0 -DBURNER_VERSION_PATCH=0
 DEFINES    := -DBURNER_NAME="Burner"
 
-ROOT_DIR        = $(PWD)/
+ROOT_DIR        = $(PWD)
 SRC_DIR         = ./src
 OBJ_DIR         = $(PWD)/obj
 TESTS_DIR       = ./src/tests
@@ -34,21 +34,25 @@ SHADERS_OBJ = $(patsubst $(SHADER_SRC_DIR)/%,$(SHADER_OBJ_DIR)/%.spv,$(ALL_SHADE
 
 TOOLS_DIR   = ./src/tools
 
+CMORE_STATIC_LIB = $(ROOT_DIR)/cmore.a
+
+export CMORE_STATIC_LIB
 export CFLAGS
-export OBJ_DIR
 export LIBS
-export ROOT_DIR
 
 all: burner tests tools
 
-burner: $(OBJ) $(BURNER_OBJ) | $(SHADERS_OBJ)
+burner: $(OBJ) $(BURNER_OBJ) $(CMORE_STATIC_LIB) | $(SHADERS_OBJ)
 	$(CC) -o $@ $^ $(CFLAGS) $(LIBS)
 
-tests: $(OBJ) $(TESTS_OBJ) $(TEST_OBJ) | $(SHADERS_OBJ)
+tests: $(OBJ) $(TESTS_OBJ) $(TEST_OBJ) $(CMORE_STATIC_LIB) | $(SHADERS_OBJ)
 	$(CC) -o $@ $^ $(CFLAGS) $(LIBS)
 
 tools:
-	$(MAKE) -C $(TOOLS_DIR)
+	$(MAKE) -C $(TOOLS_DIR) OBJ_DIR=$(OBJ_DIR)
+
+$(CMORE_STATIC_LIB):
+	$(MAKE) -e -C ./CMore $@
 
 $(OBJ_DIR)/%.o: $(SRC_DIR)/%.c
 	$(CC) -c -o $@ $< $(CFLAGS)
@@ -70,9 +74,10 @@ $(RES_DIR):
 
 .PHONY: clean
 clean:
-	rm -f *~ core burner tests $(INCDIR)/*~
+	rm -f burner tests
 	rm -r $(OBJ_DIR) $(RES_DIR)
 	$(MAKE) -C $(TOOLS_DIR) clean
+	$(MAKE) -C ./CMore clean
 
 # Make the obj directory
 $(shell mkdir -p $(OBJ_DIR))

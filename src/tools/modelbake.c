@@ -8,7 +8,7 @@
 #define STBI_ONLY_PNG
 #include "stb_image.h"
 
-#include "hashmap.h"
+#include "cmore/hashmap.h"
 
 
 int loadRawModel( const char *modelPath, struct aiScene const **_scene );

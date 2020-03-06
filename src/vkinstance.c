@@ -3,10 +3,10 @@
 #include <string.h>
 #include <stdbool.h>
 #include "pomIO.h"
-#include "hashmap.h"
+#include "cmore/hashmap.h"
 #include <stdlib.h>
 #include "config.h"
-#include "stack.h"
+#include "cmore/stack.h"
 
 // Just going to use debug level for now
 #define LOG( log, ... ) LOG_MODULE( DEBUG, vkinstance, log, ##__VA_ARGS__ )

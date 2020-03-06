@@ -1,11 +1,11 @@
 
-TOOL_SRC_DIR    = ./
-
+TOOL_SRC_DIR    = $(CURDIR)
+CALLER_DIR      = $(PWD)
 MODELBAKE_SRC   = $(TOOL_SRC_DIR)/modelbake.c
 MODELBAKE_OBJ   = $(patsubst $(TOOL_SRC_DIR)/%.c,$(OBJ_DIR)/%.o,$(MODELBAKE_SRC))
 MODELBAKE_LIBS  = -lassimp
-MODELBAKE_DEPS  = $(OBJ_DIR)/hashmap.o $(OBJ_DIR)/pomModelFormat.o
-MODELBAKE_BIN   = $(ROOT_DIR)/modelbake
+MODELBAKE_DEPS  = $(CMORE_STATIC_LIB) $(OBJ_DIR)/pomModelFormat.o 
+MODELBAKE_BIN   = $(CALLER_DIR)/modelbake
 
 all: $(MODELBAKE_BIN)
 

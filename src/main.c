@@ -2,7 +2,7 @@
 #include <stdlib.h>
 #include "config.h"
 #include "system_hw.h"
-#include "hashmap.h"
+#include "cmore/hashmap.h"
 #include "common.h"
 #include "vkinstance.h"
 #include "vkdevice.h"
