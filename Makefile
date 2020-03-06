@@ -78,3 +78,7 @@ clean:
 $(shell mkdir -p $(OBJ_DIR))
 $(shell mkdir -p $(RES_DIR))
 $(shell mkdir -p $(SHADER_OBJ_DIR))
+$(info $(shell \
+	if [ ! -e "./CMore/.git" ];\
+		then git submodule init && git submodule update;\
+	fi ))
