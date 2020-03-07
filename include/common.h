@@ -14,6 +14,9 @@
 # define UNUSED(x) x
 #endif
 
+#ifndef DEFAULT_CONFIG_PATH
+#define DEFAULT_CONFIG_PATH "./config.ini"
+#endif
 #ifndef BURNER_VERSION_MAJOR
 #define BURNER_VERSION_MAJOR 0
 #endif //BURNER_VERSION_MAJOR
@@ -35,6 +38,11 @@
 #ifndef DEFAULT_VK_VALIDATION_LAYERS
 #define DEFAULT_VK_VALIDATION_LAYERS "VK_LAYER_KHRONOS_validation"
 #endif //DEFAULT_HEIGHT
+
+#define CONFIG_NUMTHREAD_KEY "numthreads"
+#ifndef DEFAULT_NUMTHREADS
+#define DEFAULT_NUMTHREADS "3"
+#endif //DEFAULT_NUMTHREADS
 
 // TODO - move this def to somewhere more common
 typedef struct PomCommonNode PomCommonNode;

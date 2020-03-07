@@ -11,14 +11,36 @@
 #include "vkcommands.h"
 #include "pomIO.h"
 #include "vksynchronisation.h"
+#include "cmore/threadpool.h"
+#include "pomModelFormat.h"
 
 // Just going to use debug level for now
 #define LOG( log, ... ) LOG_MODULE( DEBUG, main, log, ##__VA_ARGS__ )
+typedef struct VulkanCtx VulkanCtx;
+struct VulkanCtx{
+    ShaderInfo basicShaders;
+    VkRenderPass renderPass;
+    PomPipelineCtx pipelineCtx;
+    PomSemaphoreCtx imageSemaphore, renderSemaphore;
+    bool initialised;
+};
 
-// Allow default config path to be overruled by compile option
-#ifndef DEFAULT_CONFIG_PATH
-#define DEFAULT_CONFIG_PATH "./config.ini"
-#endif
+// TODO - maybe move this into pomModelFormat.h
+typedef struct PomModelCtx PomModelCtx;
+struct PomModelCtx{
+    PomModelFormat *format;
+    uint8_t *dataBlock;
+    const char *filePath;
+    bool initialised;
+};
+
+const char *modelPaths[] = {
+    "./res/models/nanosuit.pomf"
+};
+const size_t numModelPaths = sizeof( modelPaths ) / sizeof( char* );
+
+void setupVulkan( void* _userData );
+void loadModel( void* _userData );
 
 int main( int argc, char ** argv ){
     LOG( "Program Entry" );
@@ -39,66 +61,34 @@ int main( int argc, char ** argv ){
         printf( "Error loading configuration file\n" );
     }
 
-    LOG( "Create Vk instance" );
-    if( pomCreateVkInstance() ){
-        LOG( "Error in instance creation" );
-    }
-    LOG( "Find device" );
-    if( pomPickPhysicalDevice() ){
-        LOG( "Error in physical device creation" );
-    }
-    LOG( "Create logical device" );
-    if( pomCreateLogicalDevice() ){
-        LOG( "Failed to create logical device" );
+    LOG( "Create Threadpool" );
+    uint8_t numThreads = atoi( pomMapGetSet( &systemConfig.mapCtx, CONFIG_NUMTHREAD_KEY, DEFAULT_NUMTHREADS ) );
+    PomThreadpoolCtx threadpoolCtx = { 0 };
+    pomThreadpoolInit( &threadpoolCtx, numThreads );
+
+    // Schedule all models to be loaded
+    PomModelCtx models[ sizeof( modelPaths ) / sizeof( char* ) ] = { 0 };
+    for( uint32_t i = 0; i < numModelPaths; i++ ){
+        models[ i ].filePath = modelPaths[ i ];
+        pomThreadpoolScheduleJob( &threadpoolCtx, &(PomThreadpoolJob){ loadModel, &models[ i ] } );
     }
 
-    LOG( "Create shaders" );
-    ShaderInfo basicShaders = {
-        .vertexShaderPath = "./res/shaders/basicV.vert.spv",
-        .fragmentShaderPath = "./res/shaders/basicF.frag.spv"
-    };
-    if( pomShaderCreate( &basicShaders ) ){
-        LOG( "Failed to create shaders" );
-    }
-    VkRenderPass renderPass;
-    LOG( "Create RenderPass" );
-    if( pomRenderPassCreate( &renderPass ) ){
-        LOG( "Failed to create RenderPass" );
-    }
-    PomPipelineCtx pipelineCtx={
-        .pipelineType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO
-    };
-    LOG( "Create Pipeline" );
-    if( pomPipelineCreate( &pipelineCtx, &basicShaders, &renderPass ) ){
-        LOG( "Failed to create Pipeline" );
-    }
-    LOG( "Create swapchain image views" );
-    if( pomSwapchainImageViewsCreate() ){
-        LOG( "Failed to create swapchain image views" );
-    }
-    LOG( "Create swapchain framebuffers" );
-    if( pomSwapchainFramebuffersCreate( &renderPass ) ){
-        LOG( "Failed to create swapchain framebuffers" );
-    }
-    LOG( "Create command pool" );
-    if( pomCommandPoolCreate() ){
-        LOG( "Failed to create command pool" );
-    }
-    LOG( "Create command buffers" );
-    if( pomCommandBuffersCreate() ){
-        LOG( "Failed to create command buffers" );
-    }
-    LOG( "Record default renderpass" );
-    if( pomRecordDefaultCommands( &renderPass, &pipelineCtx ) ){
-        LOG( "Failed to record default renderpass" );
-    }
+    // Schedule vulkan context to be set up
+    VulkanCtx vCtx = { 0 };
+    pomThreadpoolScheduleJob( &threadpoolCtx, &(PomThreadpoolJob){ setupVulkan, &vCtx } );
 
-    PomSemaphoreCtx imageSemaphore, renderSemaphore;
-    LOG( "Create semaphores" );
-    if( pomSemaphoreCreate( &imageSemaphore ) ||
-        pomSemaphoreCreate( &renderSemaphore ) ){
-        LOG( "Failed to create semaphores");
+    // Wait for jobs to complete
+    pomThreadpoolJoinAll( &threadpoolCtx );
+
+    // Verify all models were correctly loaded
+    for( uint32_t i = 0; i < numModelPaths; i++ ){
+        if( !models[ i ].initialised ){
+            LOG( "Failed to load model %s", models[ i ].filePath );
+            // TODO - error handling here
+        }
     }
+    LOG( "Models loaded" );
+    
     uint32_t numCommandBuffers;
     uint32_t gfxQueueIdx, presentQueueIdx;
     VkCommandBuffer *commandBuffers = pomCommandBuffersGet( &numCommandBuffers );
@@ -112,7 +102,7 @@ int main( int argc, char ** argv ){
         // Draw a frame
         uint32_t imageIndex;
         vkAcquireNextImageKHR( *dev, *swapchain, UINT64_MAX,
-                               imageSemaphore.semaphore, NULL, &imageIndex );
+                               vCtx.imageSemaphore.semaphore, NULL, &imageIndex );
 
         if( imageIndex >= numCommandBuffers ){
             LOG( "Discrepency between swapchain image index and command buffer size.\
@@ -121,9 +111,9 @@ int main( int argc, char ** argv ){
         }
         VkSubmitInfo drawSubmitInfo = {
             .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
-            .pWaitSemaphores = (VkSemaphore[]){ imageSemaphore.semaphore },
+            .pWaitSemaphores = (VkSemaphore[]){ vCtx.imageSemaphore.semaphore },
             .waitSemaphoreCount = 1,
-            .pSignalSemaphores = (VkSemaphore[]){ renderSemaphore.semaphore },
+            .pSignalSemaphores = (VkSemaphore[]){ vCtx.renderSemaphore.semaphore },
             .signalSemaphoreCount = 1,
             .commandBufferCount = 1,
             .pCommandBuffers = &commandBuffers[ imageIndex ],
@@ -137,7 +127,7 @@ int main( int argc, char ** argv ){
 
         VkPresentInfoKHR presentInfo = {
             .sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
-            .pWaitSemaphores = (VkSemaphore[]){ renderSemaphore.semaphore },
+            .pWaitSemaphores = (VkSemaphore[]){ vCtx.renderSemaphore.semaphore },
             .waitSemaphoreCount = 1,
             .swapchainCount = 1,
             .pSwapchains = swapchain,
@@ -153,10 +143,11 @@ int main( int argc, char ** argv ){
         vkQueueWaitIdle( *presentQueue );
 
     }
+    
     vkDeviceWaitIdle( *dev );
     LOG( "Destroy semaphores" );
-    if( pomSemaphoreDestroy( &renderSemaphore ) ||
-        pomSemaphoreDestroy( &imageSemaphore ) ){
+    if( pomSemaphoreDestroy( &vCtx.renderSemaphore ) ||
+        pomSemaphoreDestroy( &vCtx.imageSemaphore ) ){
         LOG( "Failed to destroy semaphores" );
     }
     LOG( "Destroy command buffers" );
@@ -176,15 +167,15 @@ int main( int argc, char ** argv ){
         LOG( "Failed to destroy swapchain image views" );
     }
     LOG( "Destroy Pipeline" );
-    if( pomPipelineDestroy( &pipelineCtx ) ){
+    if( pomPipelineDestroy( &vCtx.pipelineCtx ) ){
         LOG( "Failed to destroy pipeline" );
     }
     LOG( "Destroy RenderPass" );
-    if( pomRenderPassDestroy( &renderPass ) ){
+    if( pomRenderPassDestroy( &vCtx.renderPass ) ){
         LOG( "Failed to destroy RenderPass" );
     }
     LOG( "Destroy shaders" );
-    if( pomShaderDestroy( &basicShaders ) ){
+    if( pomShaderDestroy( &vCtx.basicShaders ) ){
         LOG( "Failed to destroy shaders" );
     }
 
@@ -199,12 +190,115 @@ int main( int argc, char ** argv ){
     LOG( "Destroy Vk instance" );
     if( pomDestroyVkInstance() ){
         LOG( "Error in deletion of vk instance" );
-    } 
-    LOG( "Program exit" );
+    }
+
+    LOG( "Destroy threadpool\n" );
+    if( pomThreadpoolClear( &threadpoolCtx ) ){
+        LOG( "Failed to destroy threadpool" );
+    }
 
     if( saveSystemConfig( configPath ) ){
         LOG( "Couldn't write new config files" );
     }
     clearSystemConfig();
+
+    LOG( "Program exit" );
     return EXIT_SUCCESS;
+}
+
+
+void loadModel( void *_userData ){
+    // TODO - eventually cache the loaded models
+    PomModelCtx *modelCtx = (PomModelCtx*) _userData;
+    if( modelCtx->initialised ){
+        // Model already loaded
+        LOG( "Attempting to reload model %s", modelCtx->filePath );
+        return;
+    }
+
+    if( loadBakedModel( modelCtx->filePath, &modelCtx->format, &modelCtx->dataBlock ) ){
+        // Failed to load model
+        LOG( "Failed to load model %s", modelCtx->filePath );
+        modelCtx->initialised = false;
+        return;
+    }
+    modelCtx->initialised = true;
+    return;
+}
+
+void setupVulkan( void* _userData ){
+    VulkanCtx *vCtx = (VulkanCtx*) _userData;
+    vCtx->initialised = false;
+    LOG( "Create Vk instance" );
+    if( pomCreateVkInstance() ){
+        LOG( "Error in instance creation" );
+        return;
+    }
+    LOG( "Find device" );
+    if( pomPickPhysicalDevice() ){
+        LOG( "Error in physical device creation" );
+        return;
+    }
+    LOG( "Create logical device" );
+    if( pomCreateLogicalDevice() ){
+        LOG( "Failed to create logical device" );
+        return;
+    }
+
+    LOG( "Create shaders" );
+    vCtx->basicShaders = (ShaderInfo){
+        .vertexShaderPath = "./res/shaders/basicV.vert.spv",
+        .fragmentShaderPath = "./res/shaders/basicF.frag.spv"
+    };
+    if( pomShaderCreate( &vCtx->basicShaders ) ){
+        LOG( "Failed to create shaders" );
+        return;
+    }
+    LOG( "Create RenderPass" );
+    if( pomRenderPassCreate( &vCtx->renderPass ) ){
+        LOG( "Failed to create RenderPass" );
+        return;
+    }
+    vCtx->pipelineCtx=(PomPipelineCtx){
+        .pipelineType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO
+    };
+    LOG( "Create Pipeline" );
+    if( pomPipelineCreate( &vCtx->pipelineCtx, &vCtx->basicShaders, &vCtx->renderPass ) ){
+        LOG( "Failed to create Pipeline" );
+        return;
+    }
+    LOG( "Create swapchain image views" );
+    if( pomSwapchainImageViewsCreate() ){
+        LOG( "Failed to create swapchain image views" );
+        return;
+    }
+    LOG( "Create swapchain framebuffers" );
+    if( pomSwapchainFramebuffersCreate( &vCtx->renderPass ) ){
+        LOG( "Failed to create swapchain framebuffers" );
+        return;
+    }
+    LOG( "Create command pool" );
+    if( pomCommandPoolCreate() ){
+        LOG( "Failed to create command pool" );
+        return;
+    }
+    LOG( "Create command buffers" );
+    if( pomCommandBuffersCreate() ){
+        LOG( "Failed to create command buffers" );
+        return;
+    }
+    LOG( "Record default renderpass" );
+    if( pomRecordDefaultCommands( &vCtx->renderPass, &vCtx->pipelineCtx ) ){
+        LOG( "Failed to record default renderpass" );
+        return;
+    }
+
+    LOG( "Create semaphores" );
+    if( pomSemaphoreCreate( &vCtx->imageSemaphore ) ||
+        pomSemaphoreCreate( &vCtx->renderSemaphore ) ){
+        LOG( "Failed to create semaphores");
+        return;
+    }
+    LOG( "Vulkan set up successfully" );
+    vCtx->initialised = true;
 }
