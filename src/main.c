@@ -35,7 +35,9 @@ struct PomModelCtx{
 };
 
 const char *modelPaths[] = {
-    "./res/models/nanosuit.pomf"
+    "./res/models/nanosuit.pomf",
+    "./res/models/buddha.pomf",
+    "./res/models/barrel.pomf"
 };
 const size_t numModelPaths = sizeof( modelPaths ) / sizeof( char* );
 
@@ -65,17 +67,27 @@ int main( int argc, char ** argv ){
     uint8_t numThreads = atoi( pomMapGetSet( &systemConfig.mapCtx, CONFIG_NUMTHREAD_KEY, DEFAULT_NUMTHREADS ) );
     PomThreadpoolCtx threadpoolCtx = { 0 };
     pomThreadpoolInit( &threadpoolCtx, numThreads );
-
+    VulkanCtx vCtx = { 0 };
+    
+    // Keep some of these variables within a single scope to save a bit of stack space.
+    // TODO - maybe move the whole setup stuff to a separate function altogether
+    {
     // Schedule all models to be loaded
     PomModelCtx models[ sizeof( modelPaths ) / sizeof( char* ) ] = { 0 };
+    PomThreadpoolJob jobs[ sizeof( modelPaths ) / sizeof( char* ) ] = { 0 };
     for( uint32_t i = 0; i < numModelPaths; i++ ){
-        models[ i ].filePath = modelPaths[ i ];
-        pomThreadpoolScheduleJob( &threadpoolCtx, &(PomThreadpoolJob){ loadModel, &models[ i ] } );
+        PomModelCtx *model = &models[ i ];
+        PomThreadpoolJob *job = &jobs[ i ];
+        model->filePath = modelPaths[ i ];
+        //loadModel( &models[ i ] );
+        job->args = model;
+        job->func = loadModel;
+        pomThreadpoolScheduleJob( &threadpoolCtx, job );
     }
 
     // Schedule vulkan context to be set up
-    VulkanCtx vCtx = { 0 };
-    pomThreadpoolScheduleJob( &threadpoolCtx, &(PomThreadpoolJob){ setupVulkan, &vCtx } );
+    PomThreadpoolJob vkSetupJob = { .func=setupVulkan, .args=&vCtx };
+    pomThreadpoolScheduleJob( &threadpoolCtx, &vkSetupJob );
 
     // Wait for jobs to complete
     pomThreadpoolJoinAll( &threadpoolCtx );
@@ -87,8 +99,9 @@ int main( int argc, char ** argv ){
             // TODO - error handling here
         }
     }
+    } //endscope
     LOG( "Models loaded" );
-    
+
     uint32_t numCommandBuffers;
     uint32_t gfxQueueIdx, presentQueueIdx;
     VkCommandBuffer *commandBuffers = pomCommandBuffersGet( &numCommandBuffers );

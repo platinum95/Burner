@@ -48,6 +48,7 @@ struct PomModelMeshInfo{
     uint64_t dataSize;
     uint32_t dataStride;
     uint32_t numUvCoords;
+    uint32_t hasTangentSpace;
 };
 
 struct PomSubmodelInfo{

@@ -114,7 +114,7 @@ int main( int argc, char ** argv ){
                            materialBlockSize + modelDataBlockSizeBytes;
     size_t totalModelFileSize = formatHeaderSizeBytes + dataBlockSize;
                               
-    uint8_t *totalModelDataBlock = (uint8_t*) malloc( totalModelFileSize );
+    uint8_t *totalModelDataBlock = (uint8_t*) calloc( totalModelFileSize, sizeof( uint8_t ) );
     // Accumulator makes it easier to later add blocks between existing ones
     uint8_t *dataBlockAccum = totalModelDataBlock;
 
@@ -202,7 +202,7 @@ int main( int argc, char ** argv ){
         err = 1;
         goto populateDataFailure;
     }
-        if( texBytesWritten != texSize ){
+    if( texBytesWritten != texSize ){
         printf( "Inconsistency in material bytes written and expected material block size\n" );
         err = 1;
         goto populateDataFailure;
@@ -222,6 +222,7 @@ int main( int argc, char ** argv ){
         goto populateDataFailure;
     }
 
+    printf( "Write output file\n" );
     if( writeBakedModel( format, dataBlockStart, dataBlockSize, bakedModelPath ) ){
         printf( "Failed to write output file\n" );
         goto populateDataFailure;
@@ -254,8 +255,15 @@ getSizeError:
 }
 
 int loadRawModel( const char *modelPath, struct aiScene const **_scene ){
-    *_scene = aiImportFile( modelPath, aiProcessPreset_TargetRealtime_MaxQuality );
     
+    unsigned int aiFlags = aiProcess_CalcTangentSpace |
+                           aiProcess_Debone | // no bones for now
+                           aiProcess_GenNormals |
+                           aiProcess_OptimizeGraph |
+                           aiProcess_OptimizeMeshes |
+                           aiProcess_Triangulate;
+    
+    *_scene = aiImportFile( modelPath, aiFlags );
 	if ( !*_scene ) {
         printf( "ERR: Failed to open model file \"%s\"\n", modelPath );
 		return 1;
@@ -316,21 +324,24 @@ int populateMeshData( const struct aiMesh *mesh, PomModelMeshInfo *meshInfo,
     float *vertexArray = (float*) &indexArray[ curIndexPos ];
     uint32_t vertexCount = mesh->mNumVertices;
     size_t currVertexOffset = 0;
-
+    bool hasTangentSpace = ( mesh->mBitangents ) && ( mesh->mTangents );
     for( uint32_t i = 0; i < vertexCount; i++ ){
         struct aiVector3D * posData = &mesh->mVertices[ i ];
         struct aiVector3D * normalData = &mesh->mNormals[ i ];
-        struct aiVector3D * tangentData = &mesh->mTangents[ i ];
-        struct aiVector3D * bitangentData = &mesh->mBitangents[ i ];
         
         memcpy( &vertexArray[ currVertexOffset ], posData, 3 * sizeof( float ) );
         currVertexOffset += 3;
         memcpy( &vertexArray[ currVertexOffset ], normalData, 3 * sizeof( float ) );
         currVertexOffset += 3;
-        memcpy( &vertexArray[ currVertexOffset ], tangentData, 3 * sizeof( float ) );
-        currVertexOffset += 3;
-        memcpy( &vertexArray[ currVertexOffset ], bitangentData, 3 * sizeof( float ) );
-        currVertexOffset += 3;
+
+        if( hasTangentSpace ){
+            struct aiVector3D * tangentData = &mesh->mTangents[ i ];
+            struct aiVector3D * bitangentData = &mesh->mBitangents[ i ];
+            memcpy( &vertexArray[ currVertexOffset ], tangentData, 3 * sizeof( float ) );
+            currVertexOffset += 3;
+            memcpy( &vertexArray[ currVertexOffset ], bitangentData, 3 * sizeof( float ) );
+            currVertexOffset += 3;
+        }
 
         // Copy over all UV coord data
         for( uint32_t uvIdx = 0; uvIdx < AI_MAX_NUMBER_OF_TEXTURECOORDS; uvIdx++ ){
@@ -364,6 +375,8 @@ int populateMeshData( const struct aiMesh *mesh, PomModelMeshInfo *meshInfo,
     meshInfo->numVertices = vertexCount;
     meshInfo->numIndices = numIndices;
     meshInfo->dataSize = currWrittenBytes;
+    meshInfo->hasTangentSpace = hasTangentSpace;
+    meshInfo->nameOffset = NULL;
 
     return 0;
 }
@@ -372,11 +385,15 @@ int getAllMeshSize( const struct aiScene *_scene, size_t *_sizeBytes ){
     uint32_t numMesh = _scene->mNumMeshes;
     size_t bytesAccum = 0; 
 
-    const uint8_t numVectorTypes = 4; // Position, normal, tangent, bitangent
     const uint8_t vectorLen = 3; // 3-element vector
 
     for( uint32_t i = 0; i < numMesh; i++ ){
         const struct aiMesh *mesh = _scene->mMeshes[ i ];
+        // Should always have position + normal vectors.
+        // Tangent space is not guaranteed.
+        bool hasTangentSpace = ( mesh->mTangents ) && ( mesh->mBitangents );
+        const uint8_t numVectorTypes = hasTangentSpace ? 4 : 2;
+        
         uint32_t meshIndexCount;
         uint32_t meshFloatElementCount;
         // Assume triangulated faces

@@ -51,13 +51,14 @@ export LIBS
 
 all: burner tests
 
-burner: $(OBJ) $(BURNER_OBJ) $(CMORE_STATIC_LIB) | $(SHADERS_OBJ)
+burner: $(OBJ) $(BURNER_OBJ) $(CMORE_STATIC_LIB) | $(SHADERS_OBJ) tools
 	$(CC) -o $@ $^ $(CFLAGS) $(LIBS)
 
 tests: $(OBJ) $(TESTS_OBJ) $(TEST_OBJ) $(CMORE_STATIC_LIB) | $(SHADERS_OBJ)
 	$(CC) -o $@ $^ $(CFLAGS) $(LIBS)
 
-tools:
+.PHONY: tools
+tools: | $(OBJ)
 	$(MAKE) -C $(TOOLS_DIR) OBJ_DIR=$(OBJ_DIR)
 
 .PHONY: models
@@ -75,8 +76,8 @@ $(OBJ_DIR)/%.o: $(TESTS_DIR)/%.c
 $(SHADER_OBJ_DIR)/%.spv: $(SHADER_SRC_DIR)/%
 	$(GLSLC)  $< -o $@
 
-$(BAKED_MODELS_DIR)/%.pomf: $(filter %$(basename $(notdir $@)).obj,$(ALL_MODELS)) tools
-	$(MODELBAKE) $< $@
+$(BAKED_MODELS_DIR)/%.pomf: | tools
+	$(MODELBAKE) $(RAW_MODELS_DIR)/$(basename $(notdir $@))/$(basename $(notdir $@)).obj $@
 
 .PHONY: clean
 clean:
