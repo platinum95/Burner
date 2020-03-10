@@ -1,3 +1,6 @@
+#ifndef POM_MODEL_FORMAT_H
+#define POM_MODEL_FORMAT_H
+
 #include <stdint.h>
 #include <stddef.h>
 
@@ -90,3 +93,4 @@ struct PomModelFormat{
     uint32_t numModelInfo;
     PomModelInfo *modelInfo;
 };
+#endif // POM_MODEL_FORMAT_H

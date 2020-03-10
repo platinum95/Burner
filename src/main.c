@@ -13,17 +13,13 @@
 #include "vksynchronisation.h"
 #include "cmore/threadpool.h"
 #include "pomModelFormat.h"
+#include "vkbuffer.h"
+#include "vkrendergroup.h"
+#include "vkmodel.h"
 
 // Just going to use debug level for now
 #define LOG( log, ... ) LOG_MODULE( DEBUG, main, log, ##__VA_ARGS__ )
-typedef struct VulkanCtx VulkanCtx;
-struct VulkanCtx{
-    ShaderInfo basicShaders;
-    VkRenderPass renderPass;
-    PomPipelineCtx pipelineCtx;
-    PomSemaphoreCtx imageSemaphore, renderSemaphore;
-    bool initialised;
-};
+
 
 // TODO - maybe move this into pomModelFormat.h
 typedef struct PomModelCtx PomModelCtx;
@@ -41,8 +37,25 @@ const char *modelPaths[] = {
 };
 const size_t numModelPaths = sizeof( modelPaths ) / sizeof( char* );
 
+typedef struct VulkanCtx VulkanCtx;
+struct VulkanCtx{
+    bool initialised;
+    ShaderInfo basicShaders;
+    VkRenderPass renderPass;
+    PomPipelineCtx pipelineCtx;
+    PomSemaphoreCtx imageSemaphore, renderSemaphore;
+    uint32_t numBuffers;
+    PomVkBufferCtx *modelBuffers;
+    PomVkBufferViewCtx *modelBufferViews;
+    uint32_t numModels;
+    PomVkModelCtx *models;
+    uint32_t numRenderGroups;
+    PomVkRenderGroupCtx *renderGroups;
+};
+
 void setupVulkan( void* _userData );
 void loadModel( void* _userData );
+static int setupCommandBuffers( VulkanCtx *_vCtx );
 
 int main( int argc, char ** argv ){
     LOG( "Program Entry" );
@@ -68,10 +81,9 @@ int main( int argc, char ** argv ){
     PomThreadpoolCtx threadpoolCtx = { 0 };
     pomThreadpoolInit( &threadpoolCtx, numThreads );
     VulkanCtx vCtx = { 0 };
-    
-    // Keep some of these variables within a single scope to save a bit of stack space.
+
     // TODO - maybe move the whole setup stuff to a separate function altogether
-    {
+    
     // Schedule all models to be loaded
     PomModelCtx models[ sizeof( modelPaths ) / sizeof( char* ) ] = { 0 };
     PomThreadpoolJob jobs[ sizeof( modelPaths ) / sizeof( char* ) ] = { 0 };
@@ -91,16 +103,49 @@ int main( int argc, char ** argv ){
 
     // Wait for jobs to complete
     pomThreadpoolJoinAll( &threadpoolCtx );
-
-    // Verify all models were correctly loaded
+    if( !vCtx.initialised ){
+        LOG( "Vulkan failed to set up" );
+        return 1;
+    }
+    // Verify all models were correctly loaded, and find number of required model ctxs
+    uint32_t numModels = 0;
     for( uint32_t i = 0; i < numModelPaths; i++ ){
         if( !models[ i ].initialised ){
             LOG( "Failed to load model %s", models[ i ].filePath );
+            return 1;
             // TODO - error handling here
         }
+        numModels += models[ i ].format->numMeshInfo;
     }
-    } //endscope
+    // Create models
+    vCtx.models = (PomVkModelCtx*) calloc( numModels, sizeof( PomVkModelCtx ) );
+    vCtx.numModels = numModels;
+    
+    uint32_t modelIdx = 0;
+    for( uint32_t i = 0; i < numModelPaths; i++ ){
+        PomModelCtx *modelCtx = &models[ i ];
+        uint32_t numMesh = modelCtx->format->numMeshInfo;
+        for( uint32_t modelMeshIdx = 0; modelMeshIdx <  numMesh; modelMeshIdx++ ){
+            PomModelMeshInfo *meshInfo = &modelCtx->format->meshInfoOffset[ modelMeshIdx ];
+            PomVkModelCtx *vkModelCtx = &vCtx.models[ modelIdx++ ];
+            pomVkModelCreate( vkModelCtx, meshInfo );
+            pomVkModelActivate( vkModelCtx );
+        }
+    }
+    
     LOG( "Models loaded" );
+
+    PomVkModelCtx *renderGroupModels[] = { &vCtx.models[ 0 ], &vCtx.models[ 1 ] };
+    // Set up renderpass
+    PomVkRenderGroupCtx renderGroupCtx = { 0 };
+    if( pomVkRenderGroupCreate( &renderGroupCtx, &vCtx.pipelineCtx, 
+                                2/*vCtx.numModels*/, renderGroupModels ) ){
+        LOG( "Failed to create rendergroup" );
+        return 1;
+    }
+    vCtx.renderGroups = &renderGroupCtx;
+    vCtx.numRenderGroups = 1;
+    setupCommandBuffers( &vCtx );
 
     uint32_t numCommandBuffers;
     uint32_t gfxQueueIdx, presentQueueIdx;
@@ -158,6 +203,9 @@ int main( int argc, char ** argv ){
     }
     
     vkDeviceWaitIdle( *dev );
+    // TODO - Destroy buffers
+
+    free( vCtx.modelBuffers );
     LOG( "Destroy semaphores" );
     if( pomSemaphoreDestroy( &vCtx.renderSemaphore ) ||
         pomSemaphoreDestroy( &vCtx.imageSemaphore ) ){
@@ -267,6 +315,47 @@ void setupVulkan( void* _userData ){
         LOG( "Failed to create shaders" );
         return;
     }
+    // Need to manually set shader attrib info for now
+    ShaderInfo *shaderInfo = &vCtx->basicShaders;
+    ShaderInterfaceInfo *shaderInterface = &shaderInfo->shaderInputAttributes;
+    shaderInterface->inputBinding.binding = 0;
+    shaderInterface->inputBinding.stride = sizeof( float ) * 14;
+    shaderInterface->inputBinding.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+    size_t pOffset = 0;
+    // Vertex Position
+    shaderInterface->inputAttribs[ 0 ].binding = 0;
+    shaderInterface->inputAttribs[ 0 ].location = 0;
+    shaderInterface->inputAttribs[ 0 ].format = VK_FORMAT_R32G32B32_SFLOAT;
+    shaderInterface->inputAttribs[ 0 ].offset = 0;
+    pOffset += sizeof( float ) * 3;
+    // Vertex Normal
+    shaderInterface->inputAttribs[ 1 ].binding = 0;
+    shaderInterface->inputAttribs[ 1 ].location = 1;
+    shaderInterface->inputAttribs[ 1 ].format = VK_FORMAT_R32G32B32_SFLOAT;
+    shaderInterface->inputAttribs[ 1 ].offset = 0;
+    pOffset += sizeof( float ) * 3;
+    // Vertex tangent
+    shaderInterface->inputAttribs[ 2 ].binding = 0;
+    shaderInterface->inputAttribs[ 2 ].location = 2;
+    shaderInterface->inputAttribs[ 2 ].format = VK_FORMAT_R32G32B32_SFLOAT;
+    shaderInterface->inputAttribs[ 2 ].offset = 0;
+    pOffset += sizeof( float ) * 3;
+    // Vertex Bitangent
+    shaderInterface->inputAttribs[ 3 ].binding = 0;
+    shaderInterface->inputAttribs[ 3 ].location = 3;
+    shaderInterface->inputAttribs[ 3 ].format = VK_FORMAT_R32G32B32_SFLOAT;
+    shaderInterface->inputAttribs[ 3 ].offset = 0;
+    pOffset += sizeof( float ) * 3;
+    // UV Coord
+    shaderInterface->inputAttribs[ 4 ].binding = 0;
+    shaderInterface->inputAttribs[ 4 ].location = 4;
+    shaderInterface->inputAttribs[ 4 ].format = VK_FORMAT_R32G32_SFLOAT;
+    shaderInterface->inputAttribs[ 4 ].offset = 0;
+    pOffset += sizeof( float ) * 2;
+    
+    shaderInterface->numInputs = 5;
+    shaderInterface->totalStride = pOffset;
+
     LOG( "Create RenderPass" );
     if( pomRenderPassCreate( &vCtx->renderPass ) ){
         LOG( "Failed to create RenderPass" );
@@ -300,11 +389,13 @@ void setupVulkan( void* _userData ){
         LOG( "Failed to create command buffers" );
         return;
     }
+    /*
     LOG( "Record default renderpass" );
     if( pomRecordDefaultCommands( &vCtx->renderPass, &vCtx->pipelineCtx ) ){
         LOG( "Failed to record default renderpass" );
         return;
     }
+    */
 
     LOG( "Create semaphores" );
     if( pomSemaphoreCreate( &vCtx->imageSemaphore ) ||
@@ -314,4 +405,66 @@ void setupVulkan( void* _userData ){
     }
     LOG( "Vulkan set up successfully" );
     vCtx->initialised = true;
+}
+
+static int setupCommandBuffers( VulkanCtx *_vCtx ){
+    uint32_t numCmdBuffers;
+    VkCommandBuffer * cmdBuffers = pomCommandBuffersGet( &numCmdBuffers );
+    if( !cmdBuffers ){
+        LOG( "Failed to get command buffers" );
+        return 1;
+    }
+    VkDevice *dev = pomGetLogicalDevice();
+    if( !dev ){
+        LOG( "Attempting to record commands without available logical device" );
+        return 1;
+    }
+    uint32_t numFramebuffers;
+    VkFramebuffer *swapchainBuffers = pomSwapchainFramebuffersGet( &numFramebuffers );
+    if( !swapchainBuffers ){
+        LOG( "Attempting to record commands without valid framebuffers" );
+        return 1;
+    }
+    VkExtent2D *swapchainExtent = pomGetSwapchainExtent();
+    if( !swapchainExtent ){
+        LOG( "Attempting to record commands without valid swapchain extent" );
+        return 1;
+    }
+
+    for( uint32_t i = 0; i < numCmdBuffers; i++ ){
+        // Begin command buffer
+        VkCommandBufferBeginInfo commandBufferBeginInfo = {
+            .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO
+        };
+        VkCommandBuffer cmdBuffer = cmdBuffers[ i ];
+        if( vkBeginCommandBuffer( cmdBuffer, &commandBufferBeginInfo ) != VK_SUCCESS ){
+            LOG( "Failed to begin recording command buffer" );
+            return 1;
+        }
+
+        VkClearValue clearValue = {{{ 0.5f, 0.5f, 0.5f, 1.0f }}};
+        
+        VkRenderPassBeginInfo renderPassBeginInfo = {
+            .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
+            .framebuffer = swapchainBuffers[ i ],
+            .renderArea.extent = *swapchainExtent,
+            .renderArea.offset = (VkOffset2D){ .x = 0, .y = 0 },
+            .renderPass = _vCtx->renderPass,
+            .pClearValues = &clearValue,
+            .clearValueCount = 1
+        };
+        vkCmdBeginRenderPass( cmdBuffer, &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE );
+
+        for( uint32_t renderGroupIdx = 0; renderGroupIdx < _vCtx->numRenderGroups; renderGroupIdx++ ){
+            pomVkRenderGroupRecord( &_vCtx->renderGroups[ renderGroupIdx ], cmdBuffer );
+        }
+        vkCmdEndRenderPass( cmdBuffer );
+
+        if( vkEndCommandBuffer( cmdBuffer ) != VK_SUCCESS ){
+            LOG( "Failed to record command" );
+            return 1;
+        }
+    
+    }
+    return 0;
 }

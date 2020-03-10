@@ -8,6 +8,9 @@
 
 #define LOG( level, log, ... ) LOG_MODULE( level, vkpipeline, log, ##__VA_ARGS__ )
 
+/**************
+ * Shader defs
+***************/
 static uint32_t * pomLoadShaderData( const char * _path, size_t *_size ){
     FILE *shaderFile = fopen( _path, "rb" );
     if( !shaderFile ){
@@ -66,6 +69,7 @@ static int pomCreateShaderModule( VkShaderModule *_module, const char *_shaderPa
 }
 
 int pomShaderCreate( ShaderInfo *_shaderInfo ){
+    // TODO - add input attribute/binding description loading from shader
     if( !_shaderInfo->vertexShaderPath || !_shaderInfo->fragmentShaderPath ){
         LOG( ERR, "Shader requires vertex and fragment stages" );
         return 1;
@@ -171,6 +175,9 @@ int pomShaderDestroy( ShaderInfo *_shaderInfo ){
     return 0;
 }
 
+/******************
+ * RenderPass defs
+*******************/
 
 int pomRenderPassCreate( VkRenderPass *_renderPass ){
     // TODO - make this more flexible
@@ -226,7 +233,6 @@ int pomRenderPassCreate( VkRenderPass *_renderPass ){
         LOG( ERR, "Failed to create RenderPass" );
         return 1;
     }
-    
 
     return 0;
 }
@@ -241,21 +247,29 @@ int pomRenderPassDestroy( VkRenderPass *_renderPass ){
     return 0;
 }
 
+/***************
+ * Pipeline defs
+****************/
+
 int pomPipelineCreate( PomPipelineCtx *_pipelineCtx, const ShaderInfo *_shaderInfo, VkRenderPass *_renderPass ){
     if( !_shaderInfo->initialised ){
         LOG( ERR, "Attempting to create pipeline with uninitialised shaders" );
         return 1;
     }
     // Create vertex input info.
-    // TODO - add VBO support
+
+    // For now, we have only 1 binding description per pipeline
     VkPipelineVertexInputStateCreateInfo vertexInputInfo = {
         .sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
-        .pVertexAttributeDescriptions = NULL,
-        .pVertexBindingDescriptions = NULL,
-        .vertexAttributeDescriptionCount = 0,
-        .vertexBindingDescriptionCount = 0
+        .pVertexAttributeDescriptions = _shaderInfo->shaderInputAttributes.inputAttribs,
+        .pVertexBindingDescriptions = &_shaderInfo->shaderInputAttributes.inputBinding,
+        .vertexAttributeDescriptionCount = _shaderInfo->shaderInputAttributes.numInputs,
+        .vertexBindingDescriptionCount = 1
     };
-
+    // Make a copy of the shader info for our pipeline context.
+    // Could take a reference to in the input shaderInfo parameter
+    // but we don't know what the scope of that is.
+    _pipelineCtx->shaderInfo = *_shaderInfo;
     VkPipelineInputAssemblyStateCreateInfo inputAssemblyInfo = {
         .sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
         .primitiveRestartEnable = VK_FALSE,

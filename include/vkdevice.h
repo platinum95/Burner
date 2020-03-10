@@ -14,6 +14,8 @@ VkQueue * pomDeviceGetPresentQueue( uint32_t *idx );
 
 VkDevice * pomGetLogicalDevice();
 
+VkPhysicalDevice * pomGetPhysicalDevice();
+
 VkFormat * pomGetSwapchainImageFormat();
 
 VkExtent2D * pomGetSwapchainExtent();

@@ -587,6 +587,10 @@ VkDevice * pomGetLogicalDevice(){
     return &vkDeviceCtx.logicalDevice;
 }
 
+VkPhysicalDevice * pomGetPhysicalDevice(){
+    return &vkDeviceCtx.physicalDeviceCtx.phyDev;
+}
+
 int pomDestroyLogicalDevice(){
     if( !vkDeviceCtx.logicalDeviceCreated ){
         LOG_WARN( "Trying to destroy uninitialised logical device" );

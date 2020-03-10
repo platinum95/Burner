@@ -3,9 +3,26 @@
 
 #include <vulkan/vulkan.h>
 #include <stdbool.h>
+#include <stdint.h>
 
+typedef struct ShaderAttributeInfo ShaderAttributeInfo;
+typedef struct ShaderInterfaceInfo ShaderInterfaceInfo;
 typedef struct ShaderInfo ShaderInfo;
 typedef struct PomPipelineCtx PomPipelineCtx;
+
+struct ShaderAttributeInfo{
+    uint32_t bindingLocation;
+    size_t dataSize;
+    uint32_t dataType; // Placeholder for datatype enum
+};
+
+struct ShaderInterfaceInfo{
+    size_t totalStride;
+    uint32_t numInputs;
+    //ShaderAttributeInfo attributes[ 16 ]; // Limit ourselves to 16 inputs for now
+    VkVertexInputBindingDescription inputBinding;
+    VkVertexInputAttributeDescription inputAttribs[ 16 ];
+};
 
 struct ShaderInfo{
     const char * vertexShaderPath;
@@ -17,6 +34,9 @@ struct ShaderInfo{
     VkPipelineShaderStageCreateInfo shaderStages[ 4 ];
     uint8_t numStages;
 
+    ShaderInterfaceInfo shaderInputAttributes;
+    
+
     bool initialised;
 };
 
@@ -25,7 +45,7 @@ struct PomPipelineCtx{
         VkGraphicsPipelineCreateInfo graphicsPipelineInfo;
         VkComputePipelineCreateInfo computePipelineInfo;
     };
-
+    ShaderInfo shaderInfo;
     VkPipeline pipeline;
     // Should be either VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO
     // or VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO
