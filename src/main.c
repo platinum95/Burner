@@ -16,6 +16,8 @@
 #include "vkbuffer.h"
 #include "vkrendergroup.h"
 #include "vkmodel.h"
+#include "camera.h"
+
 
 // Just going to use debug level for now
 #define LOG( log, ... ) LOG_MODULE( DEBUG, main, log, ##__VA_ARGS__ )
@@ -51,6 +53,8 @@ struct VulkanCtx{
     PomVkModelCtx *models;
     uint32_t numRenderGroups;
     PomVkRenderGroupCtx *renderGroups;
+
+    PomCameraCtx camera;
 };
 
 void setupVulkan( void* _userData );
@@ -131,6 +135,21 @@ int main( int argc, char ** argv ){
             pomVkModelCreate( vkModelCtx, meshInfo );
             pomVkModelActivate( vkModelCtx );
         }
+    }
+
+    // Create camera
+    const VkExtent2D *windowExtent = pomIoGetWindowExtent();
+    PomCameraCreateInfo cameraInfo = {
+        .far = 100.0f,
+        .near = 0.1f,
+        .height = windowExtent->height,
+        .width = windowExtent->width,
+        .fovRad = degToRad( 90 )
+    };
+
+    if( pomCameraCreate( &vCtx.camera, &cameraInfo ) ){
+        LOG( "Failed to create camera" );
+        return 1;
     }
     
     LOG( "Models loaded" );
