@@ -1,7 +1,7 @@
 CC          = gcc
 GLSLC       = glslc
 INCLUDES    = -I$(PWD)/include -I$(PWD)/CMore/
-CFLAGS      = $(INCLUDES) -O0 -Wall -Werror -Wextra -Wformat=2 -Wshadow -pedantic -g -Werror=vla
+CFLAGS      = $(INCLUDES) -O0 -Wall -Werror -Wextra -Wformat=2 -Wshadow -pedantic -g -Werror=vla -march=native
 LIBS        = -lm -lpthread -lvulkan -lglfw
 MODELBAKE   = ./modelbake
 
