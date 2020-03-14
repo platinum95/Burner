@@ -19,6 +19,10 @@
 #include "camera.h"
 
 
+// TODO - remove this once key input is properly implemented in PomIO
+#define GLFW_INCLUDE_VULKAN
+#include <GLFW/glfw3.h>
+
 // Just going to use debug level for now
 #define LOG( log, ... ) LOG_MODULE( DEBUG, main, log, ##__VA_ARGS__ )
 
@@ -53,13 +57,18 @@ struct VulkanCtx{
     PomVkModelCtx *models;
     uint32_t numRenderGroups;
     PomVkRenderGroupCtx *renderGroups;
-
+    PomVkDescriptorPoolCtx descriptorPoolCtx;
     PomCameraCtx camera;
 };
+
+PomCameraCtx *camera;
 
 void setupVulkan( void* _userData );
 void loadModel( void* _userData );
 static int setupCommandBuffers( VulkanCtx *_vCtx );
+static int manualShaderSetup( ShaderInfo *_shaderInfo, VkDevice _device );
+
+static void keyEvent( GLFWwindow* window, int key, int scancode, int action, int mods );
 
 int main( int argc, char ** argv ){
     LOG( "Program Entry" );
@@ -111,6 +120,8 @@ int main( int argc, char ** argv ){
         LOG( "Vulkan failed to set up" );
         return 1;
     }
+    VkDevice *device = pomGetLogicalDevice();
+
     // Verify all models were correctly loaded, and find number of required model ctxs
     uint32_t numModels = 0;
     for( uint32_t i = 0; i < numModelPaths; i++ ){
@@ -153,32 +164,70 @@ int main( int argc, char ** argv ){
     }
     
     LOG( "Models loaded" );
+    PomVkDescriptorCtx *cameraDescriptor = pomCameraGetDescriptor( &vCtx.camera );
+    if( !cameraDescriptor ){
+        LOG( "Failed to get camera descriptor" );
+        // TODO - cleanup
+        return 1;
+    }
 
-    PomVkModelCtx *renderGroupModels[] = { &vCtx.models[ 0 ], &vCtx.models[ 1 ] };
+    // Create descriptor pool
+    PomVkDescriptorPoolInfo poolInfo = { 0 };
+    //5 swapchain images, 1 RGL per SCI, 1 ML per Model per SCI. (7 + 1) * 5 = 40;
+    poolInfo.descriptorTypeSizes[ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER ] = 40;
+    if( pomVkDescriptorPoolCreate( &vCtx.descriptorPoolCtx, &poolInfo, *device ) ){
+        LOG( "Failed to create descriptor pool " );
+        // TODO - error handling
+        return 1;
+    }
+    VkDescriptorPool descriptorPool = pomVkGetDescriptorPool( &vCtx.descriptorPoolCtx );
+    if( !descriptorPool ){
+        LOG( "Failed to get descriptor pool" );
+        return 1;
+    }
+
+    PomVkModelCtx *renderGroupModels[] = { &vCtx.models[ 0 ], &vCtx.models[ 1 ],
+                                           &vCtx.models[ 2 ], &vCtx.models[ 3 ],
+                                           &vCtx.models[ 4 ], &vCtx.models[ 5 ],
+                                           &vCtx.models[ 7 ] };
     // Set up renderpass
     PomVkRenderGroupCtx renderGroupCtx = { 0 };
-    if( pomVkRenderGroupCreate( &renderGroupCtx, &vCtx.pipelineCtx, 
-                                2/*vCtx.numModels*/, renderGroupModels ) ){
+    if( pomVkRenderGroupCreate( &renderGroupCtx, &vCtx.pipelineCtx,
+                                1, cameraDescriptor,
+                                vCtx.numModels - 1, renderGroupModels ) ){
         LOG( "Failed to create rendergroup" );
         return 1;
     }
+    // Allocate descriptor sets for rendergroup
+    pomVkRenderGroupAllocateDescriptorSets( &renderGroupCtx, descriptorPool );
     vCtx.renderGroups = &renderGroupCtx;
     vCtx.numRenderGroups = 1;
     setupCommandBuffers( &vCtx );
 
+    // TODO - get rid of this
+    camera = &vCtx.camera;
+    glfwSetKeyCallback( getWindow(), keyEvent );
+
     uint32_t numCommandBuffers;
     uint32_t gfxQueueIdx, presentQueueIdx;
     VkCommandBuffer *commandBuffers = pomCommandBuffersGet( &numCommandBuffers );
-    VkDevice *dev = pomGetLogicalDevice();
     VkSwapchainKHR *swapchain = pomGetSwapchain();
     VkQueue *gfxQueue = pomDeviceGetGraphicsQueue( &gfxQueueIdx );
     VkQueue *presentQueue = pomDeviceGetPresentQueue( &presentQueueIdx );
     // Main loop
     while( !pomIoShouldClose() ){
+        // Poll for IO events
         pomIoPoll();
+        
+        // Update Camera UBO
+        if( pomCameraUpdateUBO( &vCtx.camera, *device ) ){
+            LOG( "Failed to update camera UBO" );
+            break;
+        }
+
         // Draw a frame
         uint32_t imageIndex;
-        vkAcquireNextImageKHR( *dev, *swapchain, UINT64_MAX,
+        vkAcquireNextImageKHR( *device, *swapchain, UINT64_MAX,
                                vCtx.imageSemaphore.semaphore, NULL, &imageIndex );
 
         if( imageIndex >= numCommandBuffers ){
@@ -221,7 +270,7 @@ int main( int argc, char ** argv ){
 
     }
     
-    vkDeviceWaitIdle( *dev );
+    vkDeviceWaitIdle( *device );
     // TODO - Destroy buffers
 
     free( vCtx.modelBuffers );
@@ -325,6 +374,13 @@ void setupVulkan( void* _userData ){
         return;
     }
 
+    VkDevice *dev;
+    dev = pomGetLogicalDevice();
+    if( !dev ){
+        LOG( "Could not get logical device" );
+        return;
+    }
+
     LOG( "Create shaders" );
     vCtx->basicShaders = (ShaderInfo){
         .vertexShaderPath = "./res/shaders/basicV.vert.spv",
@@ -335,45 +391,10 @@ void setupVulkan( void* _userData ){
         return;
     }
     // Need to manually set shader attrib info for now
-    ShaderInfo *shaderInfo = &vCtx->basicShaders;
-    ShaderInterfaceInfo *shaderInterface = &shaderInfo->shaderInputAttributes;
-    shaderInterface->inputBinding.binding = 0;
-    shaderInterface->inputBinding.stride = sizeof( float ) * 14;
-    shaderInterface->inputBinding.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
-    size_t pOffset = 0;
-    // Vertex Position
-    shaderInterface->inputAttribs[ 0 ].binding = 0;
-    shaderInterface->inputAttribs[ 0 ].location = 0;
-    shaderInterface->inputAttribs[ 0 ].format = VK_FORMAT_R32G32B32_SFLOAT;
-    shaderInterface->inputAttribs[ 0 ].offset = 0;
-    pOffset += sizeof( float ) * 3;
-    // Vertex Normal
-    shaderInterface->inputAttribs[ 1 ].binding = 0;
-    shaderInterface->inputAttribs[ 1 ].location = 1;
-    shaderInterface->inputAttribs[ 1 ].format = VK_FORMAT_R32G32B32_SFLOAT;
-    shaderInterface->inputAttribs[ 1 ].offset = 0;
-    pOffset += sizeof( float ) * 3;
-    // Vertex tangent
-    shaderInterface->inputAttribs[ 2 ].binding = 0;
-    shaderInterface->inputAttribs[ 2 ].location = 2;
-    shaderInterface->inputAttribs[ 2 ].format = VK_FORMAT_R32G32B32_SFLOAT;
-    shaderInterface->inputAttribs[ 2 ].offset = 0;
-    pOffset += sizeof( float ) * 3;
-    // Vertex Bitangent
-    shaderInterface->inputAttribs[ 3 ].binding = 0;
-    shaderInterface->inputAttribs[ 3 ].location = 3;
-    shaderInterface->inputAttribs[ 3 ].format = VK_FORMAT_R32G32B32_SFLOAT;
-    shaderInterface->inputAttribs[ 3 ].offset = 0;
-    pOffset += sizeof( float ) * 3;
-    // UV Coord
-    shaderInterface->inputAttribs[ 4 ].binding = 0;
-    shaderInterface->inputAttribs[ 4 ].location = 4;
-    shaderInterface->inputAttribs[ 4 ].format = VK_FORMAT_R32G32_SFLOAT;
-    shaderInterface->inputAttribs[ 4 ].offset = 0;
-    pOffset += sizeof( float ) * 2;
-    
-    shaderInterface->numInputs = 5;
-    shaderInterface->totalStride = pOffset;
+    if( manualShaderSetup( &vCtx->basicShaders, *dev ) ){
+        LOG( "Failed to setup shader interface info" );
+        return;
+    }
 
     LOG( "Create RenderPass" );
     if( pomRenderPassCreate( &vCtx->renderPass ) ){
@@ -475,7 +496,7 @@ static int setupCommandBuffers( VulkanCtx *_vCtx ){
         vkCmdBeginRenderPass( cmdBuffer, &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE );
 
         for( uint32_t renderGroupIdx = 0; renderGroupIdx < _vCtx->numRenderGroups; renderGroupIdx++ ){
-            pomVkRenderGroupRecord( &_vCtx->renderGroups[ renderGroupIdx ], cmdBuffer );
+            pomVkRenderGroupRecord( &_vCtx->renderGroups[ renderGroupIdx ], cmdBuffer, i );
         }
         vkCmdEndRenderPass( cmdBuffer );
 
@@ -486,4 +507,126 @@ static int setupCommandBuffers( VulkanCtx *_vCtx ){
     
     }
     return 0;
+}
+
+
+static int manualShaderSetup( ShaderInfo *shaderInfo, VkDevice _device ){
+    // Set up VBO attributes
+    ShaderInterfaceInfo *shaderInterface = &shaderInfo->shaderInputAttributes;
+    shaderInterface->inputBinding.binding = 0;
+    shaderInterface->inputBinding.stride = sizeof( float ) * 14;
+    shaderInterface->inputBinding.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+    size_t pOffset = 0;
+    // Vertex Position
+    shaderInterface->inputAttribs[ 0 ].binding = 0;
+    shaderInterface->inputAttribs[ 0 ].location = 0;
+    shaderInterface->inputAttribs[ 0 ].format = VK_FORMAT_R32G32B32_SFLOAT;
+    shaderInterface->inputAttribs[ 0 ].offset = 0;
+    pOffset += sizeof( float ) * 3;
+    // Vertex Normal
+    shaderInterface->inputAttribs[ 1 ].binding = 0;
+    shaderInterface->inputAttribs[ 1 ].location = 1;
+    shaderInterface->inputAttribs[ 1 ].format = VK_FORMAT_R32G32B32_SFLOAT;
+    shaderInterface->inputAttribs[ 1 ].offset = 0;
+    pOffset += sizeof( float ) * 3;
+    // Vertex tangent
+    shaderInterface->inputAttribs[ 2 ].binding = 0;
+    shaderInterface->inputAttribs[ 2 ].location = 2;
+    shaderInterface->inputAttribs[ 2 ].format = VK_FORMAT_R32G32B32_SFLOAT;
+    shaderInterface->inputAttribs[ 2 ].offset = 0;
+    pOffset += sizeof( float ) * 3;
+    // Vertex Bitangent
+    shaderInterface->inputAttribs[ 3 ].binding = 0;
+    shaderInterface->inputAttribs[ 3 ].location = 3;
+    shaderInterface->inputAttribs[ 3 ].format = VK_FORMAT_R32G32B32_SFLOAT;
+    shaderInterface->inputAttribs[ 3 ].offset = 0;
+    pOffset += sizeof( float ) * 3;
+    // UV Coord
+    shaderInterface->inputAttribs[ 4 ].binding = 0;
+    shaderInterface->inputAttribs[ 4 ].location = 4;
+    shaderInterface->inputAttribs[ 4 ].format = VK_FORMAT_R32G32_SFLOAT;
+    shaderInterface->inputAttribs[ 4 ].offset = 0;
+    pOffset += sizeof( float ) * 2;
+    
+    shaderInterface->numInputs = 5;
+    shaderInterface->totalStride = pOffset;
+
+    // Set up Descriptor Set Layouts
+    VkDescriptorSetLayoutBinding cameraUboLayoutBinding = {
+        .binding = 0,
+        .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+        .descriptorCount = 1,
+        .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
+        .pImmutableSamplers = NULL
+    };
+    
+    VkDescriptorSetLayoutBinding modelUboLayoutBinding = {
+        .binding = 1,
+        .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+        .descriptorCount = 1,
+        .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
+        .pImmutableSamplers = NULL
+    };
+    //VkDescriptorSetLayoutBinding bindings[] = { cameraUboLayoutBinding, modelUboLayoutBinding };
+    VkDescriptorSetLayoutCreateInfo rgLayoutCreateInfo = {
+        .bindingCount = 1,
+        .pBindings = &cameraUboLayoutBinding,
+        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO
+    };
+    VkDescriptorSetLayoutCreateInfo modelLayoutCreateInfo = {
+        .bindingCount = 1,
+        .pBindings = &modelUboLayoutBinding,
+        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO
+    };
+    VkDescriptorSetLayout *setLayouts;
+
+    setLayouts = (VkDescriptorSetLayout*) malloc( sizeof( VkDescriptorSetLayout ) * 2 );
+    if( vkCreateDescriptorSetLayout( _device, &rgLayoutCreateInfo, NULL, setLayouts ) !=
+            VK_SUCCESS ){
+        LOG( "Failed to create shader layout create info" );
+        return 1;
+    }
+    if( vkCreateDescriptorSetLayout( _device, &modelLayoutCreateInfo, NULL, &setLayouts[ 1 ] ) !=
+            VK_SUCCESS ){
+        LOG( "Failed to create shader layout create info" );
+        return 1;
+    }
+    shaderInterface->descriptorSetLayoutCtx.numLayouts = 2;
+    shaderInterface->descriptorSetLayoutCtx.numRenderGroupLocalLayouts = 1;
+    shaderInterface->descriptorSetLayoutCtx.numModelLocalLayouts = 1;
+    shaderInterface->descriptorSetLayoutCtx.renderGroupSetLayouts = setLayouts;
+    shaderInterface->descriptorSetLayoutCtx.modelSetLayouts = &setLayouts[ 1 ];
+    shaderInfo->shaderInputAttributes.descriptorSetLayoutCtx.layouts = setLayouts;
+
+    return 0;
+
+
+}
+
+static void keyEvent( GLFWwindow* UNUSED(window), int key, int UNUSED(scancode), int action, int UNUSED(mods) ){
+    BaseType xT = 0.0f, yT = 0.0f, zT = 0.0f;
+    BaseType moveAmount = 1.5f;
+    if( action != GLFW_PRESS ){
+        return;
+    }
+    if( key == GLFW_KEY_W ){
+        zT = moveAmount;
+    }else if( key == GLFW_KEY_S ){
+        zT = -moveAmount;
+    }
+
+    if( key == GLFW_KEY_A ){
+        xT = moveAmount;
+    }else if( key == GLFW_KEY_D ){
+        xT = -moveAmount;
+    }
+
+    if( key == GLFW_KEY_LEFT_SHIFT ){
+        yT = moveAmount;
+    }else if( key == GLFW_KEY_LEFT_CONTROL ){
+        yT = -moveAmount;
+    }
+
+    Vec4 tVector = Vec4Gen( xT, yT, zT, 1.0f );
+    pomCameraTranslate( camera, tVector );
 }

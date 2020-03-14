@@ -170,9 +170,19 @@ int pomShaderDestroy( ShaderInfo *_shaderInfo ){
     for( uint8_t i = 0; i < _shaderInfo->numStages; i++ ){
         vkDestroyShaderModule( *dev, _shaderInfo->shaderStages[ i ].module, NULL );
     }
+    free( _shaderInfo->shaderInputAttributes.descriptorSetLayoutCtx.layouts );
     _shaderInfo->initialised = false;
 
     return 0;
+}
+
+
+const ShaderDescriptorSetCtx* pomShaderGetDescriptorSetLayoutCtx( const ShaderInfo *_shaderInfo ){
+    if( !_shaderInfo->initialised ){
+        LOG( WARN, "Trying to get descriptor set for uninitialised shader" );
+        return NULL;
+    }
+    return &_shaderInfo->shaderInputAttributes.descriptorSetLayoutCtx;
 }
 
 /******************
@@ -343,10 +353,17 @@ int pomPipelineCreate( PomPipelineCtx *_pipelineCtx, const ShaderInfo *_shaderIn
         .logicOp = VK_LOGIC_OP_COPY
     };
     
+    const ShaderDescriptorSetCtx *shaderLayouts = pomShaderGetDescriptorSetLayoutCtx( _shaderInfo );
+    if( !shaderLayouts ){
+        LOG( ERR, "Failed to get shader description set layouts for pipeline" );
+        return 1;
+    }
+
     VkPipelineLayoutCreateInfo pipelineLayoutInfo = { 0 };
     pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
     pipelineLayoutInfo.pushConstantRangeCount = 0;
-    pipelineLayoutInfo.setLayoutCount = 0;
+    pipelineLayoutInfo.setLayoutCount = shaderLayouts->numLayouts;
+    pipelineLayoutInfo.pSetLayouts = shaderLayouts->layouts;
 
     VkDevice * dev = pomGetLogicalDevice();
     if( !dev ){

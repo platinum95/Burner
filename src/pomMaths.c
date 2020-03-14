@@ -7,7 +7,7 @@ Mat4x4 createProjectionMatrix( BaseType _fovRad, BaseType _near, BaseType _far,
     BaseType aspectRatio = _width / _height;
     BaseType range = tanf( _fovRad * 0.5f ) * _near;
     BaseType Sx = ( 2 * _near ) / ( range * aspectRatio + range * aspectRatio );
-    BaseType Sy = _near / range;
+    BaseType Sy = -_near / range;
     BaseType Sz = -( _far + _near ) / ( _far - _near );
     BaseType Pz = -( 2 * _far * _near ) / ( _far - _near );
 
@@ -15,8 +15,8 @@ Mat4x4 createProjectionMatrix( BaseType _fovRad, BaseType _near, BaseType _far,
         {
             Vec4Gen( Sx, 0.0f, 0.0f, 0.0f ),
             Vec4Gen( 0.0f, Sy, 0.0f, 0.0f ),
-            Vec4Gen( 0.0f, 0.0f, Sz, Pz ),
-            Vec4Gen( 0.0f, 0.0f, -1.0f, 0.0f )
+            Vec4Gen( 0.0f, 0.0f, Sz, -1.0f ),
+            Vec4Gen( 0.0f, 0.0f, Pz, 0.0f )
         }
     };
 }
@@ -297,6 +297,13 @@ Mat4x4 mat4ScalarMult( Mat4x4 _a, BaseType _s ){
         vec4ScalarMult( mat4x4ColumnVector( _a, 2 ), _s ),
         vec4ScalarMult( mat4x4ColumnVector( _a, 3 ), _s ),
     }};
+}
+
+
+Mat4x4 mat4Translate( Mat4x4 _matrix, Vec4 _translation ){
+    Mat4x4 translationMatrix = mat4x4Identity();
+    mat4x4ColumnVector( translationMatrix, 3 ) = _translation;
+    return mat4Mult( translationMatrix, _matrix );
 }
 
 #else

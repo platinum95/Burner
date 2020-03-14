@@ -3,7 +3,9 @@
 
 #include "common.h"
 #include "pomModelFormat.h"
+#include "pomMaths.h"
 #include "vkbuffer.h"
+#include "vkdescriptor.h"
 
 #include <stdbool.h>
 
@@ -15,7 +17,9 @@ struct PomVkModelCtx{
     PomModelInfo *modelInfo;
     PomVkBufferCtx modelBuffer;
 
-    float baseTransformationMatrix[ 16 ]; // This may only need to be 12
+    Mat4x4 transformationMatrix;
+    PomVkDescriptorCtx modelDescriptorCtx;
+
 };
 
 int pomVkModelCreate( PomVkModelCtx *_modelCtx, PomModelMeshInfo *_meshInfo );
@@ -29,5 +33,11 @@ int pomVkModelActivate( PomVkModelCtx *_modelCtx );
 // guarantee that the model will be removed, just that it
 // may be removed.
 int pomVkModelDeactivate( PomVkModelCtx *_modelCtx );
+
+// Update model descriptor data in VRAM
+int pomVkModelUpdateDescriptors( PomVkModelCtx *_modelCtx, VkDevice _device );
+
+// Get the main model descriptor (UBO for now, maybe more later?)
+PomVkDescriptorCtx* pomVkModelGetDescriptor( PomVkModelCtx *_modelCtx );
 
 #endif //VK_MODEL_H

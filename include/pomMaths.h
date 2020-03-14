@@ -74,17 +74,17 @@ struct VectorN{
 }}
 
 // Macros for matrix element access
-#define mat2x2RowVector( matrix, row ) (Vec2){ { _a.mat2x2[ 0 ].vec2[ row ], _a.mat2x2[ 1 ].vec2[ row ] } }
-#define mat2x2ColumnVector( matrix, column ) _a.mat2x2[ column ]
-#define mat2x2Element( _matrix, column, row ) _a.mat2x2[ column ].vec2[ row ]
+#define mat2x2RowVector( matrix, row ) (Vec2){ { matrix.mat2x2[ 0 ].vec2[ row ], _a.mat2x2[ 1 ].vec2[ row ] } }
+#define mat2x2ColumnVector( matrix, column ) matrix.mat2x2[ column ]
+#define mat2x2Element( _matrix, column, row ) _matrix.mat2x2[ column ].vec2[ row ]
 
-#define mat3x3RowVector( matrix, row ) (Vec3){ { _a.mat3x3[ 0 ].vec3[ row ], _a.mat3x3[ 1 ].vec3[ row ], _a.mat3x3[ 2 ].vec3[ row ] } }
-#define mat3x3ColumnVector( matrix, column ) _a.mat3x3[ column ]
-#define mat3x3Element( _matrix, column, row ) _a.mat3x3[ column ].vec3[ row ]
+#define mat3x3RowVector( matrix, row ) (Vec3){ { matrix.mat3x3[ 0 ].vec3[ row ], _a.mat3x3[ 1 ].vec3[ row ], _a.mat3x3[ 2 ].vec3[ row ] } }
+#define mat3x3ColumnVector( matrix, column ) matrix.mat3x3[ column ]
+#define mat3x3Element( _matrix, column, row ) _matrix.mat3x3[ column ].vec3[ row ]
 
-#define mat4x4RowVector( matrix, row ) (Vec4){ { _a.mat4x4[ 0 ].vec4[ row ], _a.mat4x4[ 1 ].vec4[ row ], _a.mat4x4[ 2 ].vec4[ row ], _a.mat4x4[ 3 ].vec4[ row ] } }
-#define mat4x4ColumnVector( matrix, column ) _a.mat4x4[ column ]
-#define mat4x4Element( _matrix, column, row ) _a.mat4x4[ column ].vec4[ row ]
+#define mat4x4RowVector( matrix, row ) (Vec4){ { matrix.mat4x4[ 0 ].vec4[ row ], _a.mat4x4[ 1 ].vec4[ row ], _a.mat4x4[ 2 ].vec4[ row ], _a.mat4x4[ 3 ].vec4[ row ] } }
+#define mat4x4ColumnVector( matrix, column ) matrix.mat4x4[ column ]
+#define mat4x4Element( _matrix, column, row ) _matrix.mat4x4[ column ].vec4[ row ]
 
 #define Vec4Gen( e0, e1, e2, e3 ) (Vec4){ { e0, e1, e2, e3 } }
 
@@ -122,5 +122,8 @@ Mat4x4 mat4ScalarMult( Mat4x4 _a, BaseType _s );
 
 Mat4x4 createProjectionMatrix( BaseType _fovRad, BaseType _near, BaseType _far,
                                BaseType _width, BaseType _height );
+
+
+Mat4x4 mat4Translate( Mat4x4 _matrix, Vec4 _translation );
 
 #endif // POM_MATHS_H

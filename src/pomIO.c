@@ -24,6 +24,11 @@ struct PomIoCtx{
 
 PomIoCtx pomIoCtx = { 0 };
 
+// TODO - remove
+GLFWwindow *getWindow(){
+    return pomIoCtx.window;
+}
+
 // Initialise IO given values in the system configuration
 int pomIoInit(){
     if( pomIoCtx.initialised ){

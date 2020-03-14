@@ -10,7 +10,27 @@ layout( location = 4 ) in vec2 uvCoord;
 
 layout( location = 0 ) out vec3 fragColor;
 
+layout( binding = 0 ) uniform CameraUBO {
+    mat4 projectionMatrix;
+    mat4 viewMatrix;
+    mat4 PvMatrix;
+} cameraUbo;
+
+layout( binding = 1 ) uniform ModelUBO {
+    mat4 modelMatrix;
+} modelUbo;
+
+// Can put another UBO here for shading properties
+
+mat4 projectionMatrix = mat4( 
+0.05, 0, 0, 0, 
+0, 0.05, 0, 0, 
+0, 0, -0.05, 0, 
+-0, -0, -0, 1
+);
+
 void main() {
-    gl_Position = vec4( vertexPos, 1.0);
-    fragColor = vec3( 0.5, 0.6, 0.7 );
+    gl_Position = cameraUbo.projectionMatrix * cameraUbo.viewMatrix * vec4( vertexPos, 1.0 );
+    //gl_Position = projectionMatrix * cameraUbo.viewMatrix * vec4( vertexPos, 1.0 );
+    fragColor = vec3( 0.1, 0.1, 0.1 );
 }

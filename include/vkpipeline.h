@@ -5,6 +5,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+typedef struct ShaderDescriptorSetCtx ShaderDescriptorSetCtx;
 typedef struct ShaderAttributeInfo ShaderAttributeInfo;
 typedef struct ShaderInterfaceInfo ShaderInterfaceInfo;
 typedef struct ShaderInfo ShaderInfo;
@@ -16,12 +17,25 @@ struct ShaderAttributeInfo{
     uint32_t dataType; // Placeholder for datatype enum
 };
 
+struct ShaderDescriptorSetCtx{
+    uint32_t numLayouts;
+    VkDescriptorSetLayout *layouts;
+
+    // The rest of the members just alias the above array
+    uint32_t numModelLocalLayouts;
+    uint32_t numRenderGroupLocalLayouts;
+
+    VkDescriptorSetLayout *modelSetLayouts;
+    VkDescriptorSetLayout *renderGroupSetLayouts;
+};
+
 struct ShaderInterfaceInfo{
     size_t totalStride;
     uint32_t numInputs;
     //ShaderAttributeInfo attributes[ 16 ]; // Limit ourselves to 16 inputs for now
     VkVertexInputBindingDescription inputBinding;
     VkVertexInputAttributeDescription inputAttribs[ 16 ];
+    ShaderDescriptorSetCtx descriptorSetLayoutCtx;
 };
 
 struct ShaderInfo{
@@ -57,6 +71,7 @@ struct PomPipelineCtx{
 int pomShaderCreate( ShaderInfo *_shaderInfo );
 
 int pomShaderDestroy( ShaderInfo *_shaderInfo );
+const ShaderDescriptorSetCtx* pomShaderGetDescriptorSetLayoutCtx( const ShaderInfo *_shaderInfo );
 
 int pomRenderPassCreate( VkRenderPass *_renderPass );
 int pomRenderPassDestroy( VkRenderPass *_renderPass );

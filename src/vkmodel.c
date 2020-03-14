@@ -13,16 +13,43 @@ int pomVkModelCreate( PomVkModelCtx *_modelCtx, PomModelMeshInfo *_meshInfo ){
     }
     // Model buffer will be vertex + index in one
     VkBufferUsageFlags bufferFlags = VK_BUFFER_USAGE_INDEX_BUFFER_BIT |
-                                     VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
-    
+                                     VK_BUFFER_USAGE_VERTEX_BUFFER_BIT |
+                                     VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
+
+    const size_t uboAlignment = 0x20; // TODO - get this from PhysicalDeviceLimits.minUniformBufferOffsetAlignment
+    const size_t boundaryMask = SIZE_MAX - ( uboAlignment - 1 );
+
     _modelCtx->modelMeshInfo = _meshInfo;
-    size_t modelSize = _meshInfo->dataSize;
+    const size_t modelSize = _meshInfo->dataSize;
+    const size_t alignedUboOffset = ( ( modelSize - 1 ) + uboAlignment ) & boundaryMask;
+    const size_t uboPadding = alignedUboOffset - modelSize;
+    const size_t descriptorDataSize = sizeof( Mat4x4 );
+    const size_t modelBufferSize = modelSize + uboPadding + descriptorDataSize;
     if( pomVkBufferCreate( &_modelCtx->modelBuffer, bufferFlags, 
-                           modelSize, 1, NULL, 
+                           modelBufferSize, 1, NULL, 
                            VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT ) ){
         LOG( ERR, "Failed to create model buffer" );
         return 1;
     }
+    // Model buffer laid out in memory as <indices><vertices><padding><descriptor data>
+
+    // Set up model descriptor
+    PomVkUniformBufferObject ubo = {
+        .data = &_modelCtx->transformationMatrix,
+        .dataSize = sizeof( Mat4x4 )
+    };
+
+    PomVkDescriptorMemoryInfo memInfo ={
+        .bufferCtx = &_modelCtx->modelBuffer,
+        .uboOffset = alignedUboOffset
+    };
+
+    if( pomVkDescriptorCreate( &_modelCtx->modelDescriptorCtx, &ubo, &memInfo ) ){
+        LOG( ERR, "Failed to create model descriptor" );
+        pomVkBufferDestroy( &_modelCtx->modelBuffer ); 
+        return 1;
+    }
+
     
     _modelCtx->initialised = true;
     _modelCtx->active = false;
@@ -87,6 +114,9 @@ int pomVkModelActivate( PomVkModelCtx *_modelCtx ){
     memcpy( data, _modelCtx->modelMeshInfo->dataBlockOffset, (size_t) modelMeshSize );
     
     vkUnmapMemory( *dev, deviceMemory );
+    
+    // Update the descriptor data too
+    pomVkDescriptorUpdate( &_modelCtx->modelDescriptorCtx, *dev );
     _modelCtx->active = true;
     return 0;
 }
@@ -106,4 +136,19 @@ int pomVkModelDeactivate( PomVkModelCtx *_modelCtx ){
         return 1;
     }
     return 0;
+}
+
+int pomVkModelUpdateDescriptors( PomVkModelCtx *_modelCtx, VkDevice _device ){
+    // For now just update the only descriptor we have. This might change to a more complex
+    // function later on that selectively updates some descriptors, or updates different types
+    // of descriptors.
+    return pomVkDescriptorUpdate( &_modelCtx->modelDescriptorCtx, _device );
+}
+
+PomVkDescriptorCtx* pomVkModelGetDescriptor( PomVkModelCtx *_modelCtx ){
+    if( !_modelCtx->initialised ){
+        LOG( ERR, "Attempting to get descriptor from uninitialised model" );
+        return NULL;
+    }
+    return &_modelCtx->modelDescriptorCtx;
 }

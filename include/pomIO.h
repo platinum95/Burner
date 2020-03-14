@@ -32,3 +32,9 @@ bool pomIoShouldClose();
 
 // Poll for IO events
 int pomIoPoll();
+
+// TODO - remove this hacky bit once proper key events are implemented
+#define GLFW_INCLUDE_VULKAN
+#include <GLFW/glfw3.h>
+
+GLFWwindow *getWindow();

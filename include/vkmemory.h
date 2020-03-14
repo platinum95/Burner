@@ -11,6 +11,9 @@ struct PomVkMemoryCtx{
     bool initialised;
 };
 
+// TODO - memory view maybe? Basically represents an offset into a normal memory block
+// for updating subsetions of memory
+
 int pomVkAllocateMemory( PomVkMemoryCtx *_memCtx,
                          VkMemoryPropertyFlags _memFlags, 
                          VkMemoryRequirements *_memReq,
