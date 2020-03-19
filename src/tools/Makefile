@@ -4,16 +4,26 @@ CALLER_DIR      = $(PWD)
 MODELBAKE_SRC   = $(TOOL_SRC_DIR)/modelbake.c
 MODELBAKE_OBJ   = $(patsubst $(TOOL_SRC_DIR)/%.c,$(OBJ_DIR)/%.o,$(MODELBAKE_SRC))
 MODELBAKE_LIBS  = -lassimp
-MODELBAKE_DEPS  = $(CMORE_STATIC_LIB) $(OBJ_DIR)/pomModelFormat.o 
+MODELBAKE_DEPS  = $(CMORE_STATIC_LIB) $(OBJ_DIR)/pomModelFormat.o
 MODELBAKE_BIN   = $(CALLER_DIR)/modelbake
 
-all: $(MODELBAKE_BIN)
+SHADERBAKE_SRC   = $(TOOL_SRC_DIR)/shaderbake.c
+SHADERBAKE_OBJ   = $(patsubst $(TOOL_SRC_DIR)/%.c,$(OBJ_DIR)/%.o,$(SHADERBAKE_SRC))
+SHADERBAKE_LIBS  = -lshaderc_shared
+SHADERBAKE_DEPS  = $(CMORE_STATIC_LIB) $(OBJ_DIR)/pomShaderFormat.o
+SHADERBAKE_BIN   = $(CALLER_DIR)/shaderbake
+
+all: $(MODELBAKE_BIN) $(SHADERBAKE_BIN)
 
 $(MODELBAKE_BIN): $(MODELBAKE_OBJ)
-	$(CC) -o $@ $^ $(MODELBAKE_DEPS) $(CFLAGS) $(LIBS) $(MODELBAKE_LIBS) 
+	$(CC) -o $@ $^ $(MODELBAKE_DEPS) $(CFLAGS) $(LIBS) $(MODELBAKE_LIBS)
+
+$(SHADERBAKE_BIN): $(SHADERBAKE_OBJ)
+	$(CC) -o $@ $^ $(SHADERBAKE_DEPS) $(CFLAGS) $(LIBS) $(SHADERBAKE_LIBS)
 
 $(OBJ_DIR)/%.o: $(TOOL_SRC_DIR)/%.c
 	$(CC) -c -o $@ $< $(CFLAGS)
 
+
 clean:
-	rm -f $(MODELBAKE_BIN)
+	rm -f $(MODELBAKE_BIN) $(SHADERBAKE_BIN)

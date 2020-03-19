@@ -4,6 +4,7 @@ INCLUDES    = -I$(PWD)/include -I$(PWD)/CMore/
 CFLAGS      = $(INCLUDES) -O0 -Wall -Werror -Wextra -Wformat=2 -Wshadow -pedantic -g -Werror=vla -march=native
 LIBS        = -lm -lpthread -lvulkan -lglfw
 MODELBAKE   = ./modelbake
+SHADERBAKE  = ./shaderbake
 
 DEFINES     = -DBURNER_VERSION_MAJOR=0 -DBURNER_VERSION_MINOR=0 -DBURNER_VERSION_PATCH=0
 DEFINES    := -DBURNER_NAME="Burner"
@@ -49,7 +50,7 @@ export CMORE_STATIC_LIB
 export CFLAGS
 export LIBS
 
-all: burner tests
+all: burner tests $(SHADERBAKE) $(MODELBAKE)
 
 burner: $(OBJ) $(BURNER_OBJ) $(CMORE_STATIC_LIB) | $(SHADERS_OBJ) tools
 	$(CC) -o $@ $^ $(CFLAGS) $(LIBS)
@@ -58,11 +59,14 @@ tests: $(OBJ) $(TESTS_OBJ) $(TEST_OBJ) $(CMORE_STATIC_LIB) | $(SHADERS_OBJ)
 	$(CC) -o $@ $^ $(CFLAGS) $(LIBS)
 
 .PHONY: tools
-tools: | $(OBJ)
+tools: | $(OBJ) $(CMORE_STATIC_LIB)
 	$(MAKE) -C $(TOOLS_DIR) OBJ_DIR=$(OBJ_DIR)
 
 .PHONY: models
 models: $(BAKED_MODELS)
+
+$(SHADERBAKE): tools
+$(MODELBAKE): tools
 
 $(CMORE_STATIC_LIB):
 	$(MAKE) -e -C $(CMORE_DIR) $@

@@ -1,5 +1,6 @@
 #version 450
 #extension GL_ARB_separate_shader_objects : enable
+#pragma shader_stage(vertex)
 
 // Taken from vulkan tutorials
 layout( location = 0 ) in vec3 vertexPos;
@@ -7,6 +8,8 @@ layout( location = 1 ) in vec3 vertexNorm;
 layout( location = 2 ) in vec3 vertexTangent;
 layout( location = 3 ) in vec3 vertexBitangent;
 layout( location = 4 ) in vec2 uvCoord;
+
+// POM_ATTRIBUTE vertexPos 0 SHADER_VEC3
 
 layout( location = 0 ) out vec3 fragColor;
 
