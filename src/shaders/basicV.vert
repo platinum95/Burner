@@ -10,6 +10,10 @@ layout( location = 3 ) in vec3 vertexBitangent;
 layout( location = 4 ) in vec2 uvCoord;
 
 // POM_ATTRIBUTE vertexPos 0 SHADER_VEC3
+// POM_ATTRIBUTE vertexNorm 1 SHADER_VEC3
+// POM_ATTRIBUTE vertexTangent 2 SHADER_VEC3
+// POM_ATTRIBUTE vertexBitangent 3 SHADER_VEC3
+// POM_ATTRIBUTE uvCoord 4 SHADER_VEC2
 
 layout( location = 0 ) out vec3 fragColor;
 
@@ -23,17 +27,12 @@ layout( binding = 1 ) uniform ModelUBO {
     mat4 modelMatrix;
 } modelUbo;
 
-// Can put another UBO here for shading properties
+// POM_DESCRIPTOR CameraUBO UNIFORM_BUFFER 0 0 192
+// POM_DESCRIPTOR ModelUBO UNIFORM_BUFFER 0 1 64
 
-mat4 projectionMatrix = mat4( 
-0.05, 0, 0, 0, 
-0, 0.05, 0, 0, 
-0, 0, -0.05, 0, 
--0, -0, -0, 1
-);
+// Can put another UBO here for shading properties
 
 void main() {
     gl_Position = cameraUbo.projectionMatrix * cameraUbo.viewMatrix * vec4( vertexPos, 1.0 );
-    //gl_Position = projectionMatrix * cameraUbo.viewMatrix * vec4( vertexPos, 1.0 );
     fragColor = vec3( 0.1, 0.1, 0.1 );
 }

@@ -4,6 +4,7 @@
 #include <vulkan/vulkan.h>
 #include <stdbool.h>
 #include <stdint.h>
+#include "pomShaderFormat.h"
 
 typedef struct ShaderDescriptorSetCtx ShaderDescriptorSetCtx;
 typedef struct ShaderAttributeInfo ShaderAttributeInfo;
@@ -49,7 +50,7 @@ struct ShaderInfo{
     uint8_t numStages;
 
     ShaderInterfaceInfo shaderInputAttributes;
-    
+    PomShaderFormat *shaderFormats[ 4 ];    
 
     bool initialised;
 };

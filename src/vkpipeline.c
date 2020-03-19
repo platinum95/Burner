@@ -46,6 +46,7 @@ static uint32_t * pomLoadShaderData( const char * _path, size_t *_size ){
 
 static int pomCreateShaderModule( VkShaderModule *_module, const char *_shaderPath, VkDevice *_dev ){
     size_t shaderSize;
+
     uint32_t *shaderData = pomLoadShaderData( _shaderPath, &shaderSize );
     if( !shaderData ){
         LOG( ERR, "Shader stage creation failed" );
@@ -68,6 +69,72 @@ static int pomCreateShaderModule( VkShaderModule *_module, const char *_shaderPa
     return err;
 }
 
+static VkFormat _pomFormatFromDataType( PomShaderDataTypes _dataType ){
+    switch( _dataType ){
+        case SHADER_FLOAT:
+            return VK_FORMAT_R32_SFLOAT;
+        case SHADER_INT8:
+            return VK_FORMAT_R8_SINT;
+        case SHADER_INT16:
+            return VK_FORMAT_R16_SINT;
+        case SHADER_INT32:
+            return VK_FORMAT_R32_SINT;
+        case SHADER_INT64:
+            return VK_FORMAT_R64_SINT;
+        case SHADER_VEC2:
+            return VK_FORMAT_R32G32_SFLOAT;
+        case SHADER_VEC3:
+            return VK_FORMAT_R32G32B32_SFLOAT;
+        case SHADER_VEC4:
+            return VK_FORMAT_R32G32B32A32_SFLOAT;
+        default:
+            return VK_FORMAT_UNDEFINED;
+    }
+    return VK_FORMAT_UNDEFINED;
+}
+
+static size_t _pomSizeFromDataType( PomShaderDataTypes _dataType ){
+    // TODO - verify these values; alignment may be an issue
+    switch( _dataType ){
+        case SHADER_FLOAT:
+            return sizeof( float );
+        case SHADER_INT8:
+            return sizeof( int8_t );
+        case SHADER_INT16:
+            return sizeof( int16_t );
+        case SHADER_INT32:
+            return sizeof( int32_t );
+        case SHADER_INT64:
+            return sizeof( int64_t );
+        case SHADER_VEC2:
+            return 2 * sizeof( float );
+        case SHADER_VEC3:
+            return 3 * sizeof( float );
+        case SHADER_VEC4:
+            return 4 * sizeof( float );
+        default:
+            LOG( ERR, "Failed to get format data size" );
+            return 0;
+    }
+    LOG( ERR, "Failed to get format data size" );
+    return 0;
+}
+
+static int pomCreateShaderModule2( VkShaderModule *_module, VkDevice _dev, PomShaderFormat *_format ){
+    uint32_t *shaderData = _format->shaderBytecodeOffset;
+    VkShaderModuleCreateInfo moduleInfo = {
+        .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
+        .codeSize = _format->shaderBytecodeSizeBytes,
+        .pCode = shaderData
+    };
+
+    if( vkCreateShaderModule( _dev, &moduleInfo, NULL, _module ) != VK_SUCCESS ){
+        LOG( ERR, "Failed to create shader module for %s", _format->shaderNameOffset );
+        return 1;
+    }
+    return 0;
+}
+
 int pomShaderCreate( ShaderInfo *_shaderInfo ){
     // TODO - add input attribute/binding description loading from shader
     if( !_shaderInfo->vertexShaderPath || !_shaderInfo->fragmentShaderPath ){
@@ -81,19 +148,27 @@ int pomShaderCreate( ShaderInfo *_shaderInfo ){
     }
     uint8_t currStage = 0;
 
+    if( !pomShaderFormatLoad( _shaderInfo->vertexShaderPath, &_shaderInfo->shaderFormats[ 0 ] ) ){
+        LOG( ERR, "Failed to load vertex shader blob" );
+        return 1;
+    }
     // Create vertex module
     VkShaderModule vertexModule;
-    if( pomCreateShaderModule( &vertexModule, _shaderInfo->vertexShaderPath, dev ) ){
+    if( pomCreateShaderModule2( &vertexModule, *dev, _shaderInfo->shaderFormats[ 0 ] ) ){
         LOG( ERR, "Could not create vertex module of shader" );
         return 1;
     }
     VkPipelineShaderStageCreateInfo *vertexStageInfo = &_shaderInfo->shaderStages[ currStage++ ];
 
+    if( !pomShaderFormatLoad( _shaderInfo->fragmentShaderPath, &_shaderInfo->shaderFormats[ 1 ] ) ){
+        LOG( ERR, "Failed to load fragment shader blob" );
+        return 1;
+    }
     // Create fragment module
     VkShaderModule fragmentModule;
-    if( pomCreateShaderModule( &fragmentModule, _shaderInfo->fragmentShaderPath, dev ) ){
+    if( pomCreateShaderModule2( &fragmentModule, *dev, _shaderInfo->shaderFormats[ 1 ] ) ){
         LOG( ERR, "Could not create fragment module of shader" );
-        vkDestroyShaderModule( *dev, vertexModule, NULL );
+        vkDestroyShaderModule( *dev, fragmentModule, NULL );
         return 1;
     }
     VkPipelineShaderStageCreateInfo *fragmentStageInfo = &_shaderInfo->shaderStages[ currStage++ ];
@@ -151,6 +226,92 @@ int pomShaderCreate( ShaderInfo *_shaderInfo ){
             .pName = "main"
         };
     }
+
+    // Set up interface
+    // TODO - extend to other stages, not just Vertex
+    ShaderInterfaceInfo *shaderInterface = &_shaderInfo->shaderInputAttributes;
+    size_t attributeStride = 0;
+    for( uint32_t i = 0; i < _shaderInfo->shaderFormats[ 0 ]->numAttributeInfo; i++ ){
+        PomShaderAttributeInfo *attrInfo = &_shaderInfo->shaderFormats[ 0 ]->attributeInfoOffset[ i ];
+        attributeStride += _pomSizeFromDataType( attrInfo->dataType );
+        shaderInterface->inputAttribs[ i ].binding = 0;
+        shaderInterface->inputAttribs[ i ].location = attrInfo->location;
+        shaderInterface->inputAttribs[ i ].offset = 0;
+        shaderInterface->inputAttribs[ i ].format = _pomFormatFromDataType( attrInfo->dataType );
+        
+    }
+    shaderInterface->inputBinding.binding = 0;
+    shaderInterface->inputBinding.stride = attributeStride;
+    shaderInterface->inputBinding.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+    shaderInterface->numInputs = _shaderInfo->shaderFormats[ 0 ]->numAttributeInfo;
+    shaderInterface->totalStride = attributeStride;
+
+    // Set up descriptors
+    // TODO - Set destinction handling. For now, descriptors put in different sets
+    // TODO - For now, RG-local descriptor is set 0, model-local is 1+
+    uint32_t numDescriptors = _shaderInfo->shaderFormats[ 0 ]->numDescriptorInfo;
+    ShaderDescriptorSetCtx *setCtx = &shaderInterface->descriptorSetLayoutCtx;
+    if( numDescriptors > 0 ){
+        VkDescriptorSetLayout *setLayouts = 
+            (VkDescriptorSetLayout*) malloc( numDescriptors * sizeof( VkDescriptorSetLayout ) );
+        setCtx->layouts = setLayouts;
+        setCtx->numLayouts = numDescriptors;
+        setCtx->numRenderGroupLocalLayouts = 1;
+        setCtx->renderGroupSetLayouts = setLayouts;
+        PomShaderDescriptorInfo *rgLocalDescInfo = 
+            &_shaderInfo->shaderFormats[ 0 ]->descriptorInfoOffset[ 0 ];
+        VkDescriptorSetLayoutBinding renderGroupLocalLayoutBinding = {
+            .binding = rgLocalDescInfo->binding,
+            .descriptorType = rgLocalDescInfo->type,
+            .descriptorCount = 1,
+            .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
+            .pImmutableSamplers = NULL
+        };
+        VkDescriptorSetLayoutCreateInfo rgLayoutCreateInfo = {
+            .bindingCount = 1,
+            .pBindings = &renderGroupLocalLayoutBinding,
+            .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO
+        };
+        if( vkCreateDescriptorSetLayout( *dev, &rgLayoutCreateInfo, NULL, &setLayouts[ 0 ] ) !=
+                VK_SUCCESS ){
+            LOG( ERR, "Failed to create descriptor set layout for descriptor %s",\
+                 rgLocalDescInfo->nameOffset );
+            // TODO - cleanup here
+            return 1;
+        }
+
+        uint32_t modelLocalDescriptorCount = numDescriptors - 1;
+        setCtx->numModelLocalLayouts = modelLocalDescriptorCount;
+        if( modelLocalDescriptorCount > 0 ){
+            setCtx->modelSetLayouts = &setLayouts[ 1 ];
+            VkDescriptorSetLayoutCreateInfo modelLayoutCreateInfo = {
+                .bindingCount = 1,
+                .pBindings = NULL,
+                .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO
+            };
+            for( uint32_t i = 0; i < modelLocalDescriptorCount; i++ ){
+                PomShaderDescriptorInfo *modelLocalDescInfo = 
+                    &_shaderInfo->shaderFormats[ 0 ]->descriptorInfoOffset[ 1 + i ];
+                VkDescriptorSetLayoutBinding modelUboLayoutBinding = {
+                    .binding = modelLocalDescInfo->binding,
+                    .descriptorType = modelLocalDescInfo->type,
+                    .descriptorCount = 1,
+                    .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
+                    .pImmutableSamplers = NULL
+                };
+                modelLayoutCreateInfo.pBindings = &modelUboLayoutBinding;
+                if( vkCreateDescriptorSetLayout( *dev, &modelLayoutCreateInfo,
+                                                 NULL, &setLayouts[ i + 1 ] ) != VK_SUCCESS ){
+                    LOG( ERR, "Failed to create descriptor set layout for descriptor %s",\
+                         modelLocalDescInfo->nameOffset );
+                    // TODO - resource cleanup here
+                    return 1;
+                }
+
+            }
+        }
+    }
+    
 
     _shaderInfo->numStages = currStage;
     _shaderInfo->initialised = true;

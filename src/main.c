@@ -66,7 +66,7 @@ PomCameraCtx *camera;
 void setupVulkan( void* _userData );
 void loadModel( void* _userData );
 static int setupCommandBuffers( VulkanCtx *_vCtx );
-static int manualShaderSetup( ShaderInfo *_shaderInfo, VkDevice _device );
+//static int manualShaderSetup( ShaderInfo *_shaderInfo, VkDevice _device );
 
 static void keyEvent( GLFWwindow* window, int key, int scancode, int action, int mods );
 
@@ -383,18 +383,18 @@ void setupVulkan( void* _userData ){
 
     LOG( "Create shaders" );
     vCtx->basicShaders = (ShaderInfo){
-        .vertexShaderPath = "./res/shaders/basicV.vert.spv",
-        .fragmentShaderPath = "./res/shaders/basicF.frag.spv"
+        .vertexShaderPath = "./res/shaders/basicV.vert.psf",
+        .fragmentShaderPath = "./res/shaders/basicF.frag.psf"
     };
     if( pomShaderCreate( &vCtx->basicShaders ) ){
         LOG( "Failed to create shaders" );
         return;
     }
     // Need to manually set shader attrib info for now
-    if( manualShaderSetup( &vCtx->basicShaders, *dev ) ){
-        LOG( "Failed to setup shader interface info" );
-        return;
-    }
+//    if( manualShaderSetup( &vCtx->basicShaders, *dev ) ){
+//        LOG( "Failed to setup shader interface info" );
+//        return;
+ //   }
 
     LOG( "Create RenderPass" );
     if( pomRenderPassCreate( &vCtx->renderPass ) ){
@@ -510,98 +510,98 @@ static int setupCommandBuffers( VulkanCtx *_vCtx ){
 }
 
 
-static int manualShaderSetup( ShaderInfo *shaderInfo, VkDevice _device ){
-    // Set up VBO attributes
-    ShaderInterfaceInfo *shaderInterface = &shaderInfo->shaderInputAttributes;
-    shaderInterface->inputBinding.binding = 0;
-    shaderInterface->inputBinding.stride = sizeof( float ) * 14;
-    shaderInterface->inputBinding.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
-    size_t pOffset = 0;
-    // Vertex Position
-    shaderInterface->inputAttribs[ 0 ].binding = 0;
-    shaderInterface->inputAttribs[ 0 ].location = 0;
-    shaderInterface->inputAttribs[ 0 ].format = VK_FORMAT_R32G32B32_SFLOAT;
-    shaderInterface->inputAttribs[ 0 ].offset = 0;
-    pOffset += sizeof( float ) * 3;
-    // Vertex Normal
-    shaderInterface->inputAttribs[ 1 ].binding = 0;
-    shaderInterface->inputAttribs[ 1 ].location = 1;
-    shaderInterface->inputAttribs[ 1 ].format = VK_FORMAT_R32G32B32_SFLOAT;
-    shaderInterface->inputAttribs[ 1 ].offset = 0;
-    pOffset += sizeof( float ) * 3;
-    // Vertex tangent
-    shaderInterface->inputAttribs[ 2 ].binding = 0;
-    shaderInterface->inputAttribs[ 2 ].location = 2;
-    shaderInterface->inputAttribs[ 2 ].format = VK_FORMAT_R32G32B32_SFLOAT;
-    shaderInterface->inputAttribs[ 2 ].offset = 0;
-    pOffset += sizeof( float ) * 3;
-    // Vertex Bitangent
-    shaderInterface->inputAttribs[ 3 ].binding = 0;
-    shaderInterface->inputAttribs[ 3 ].location = 3;
-    shaderInterface->inputAttribs[ 3 ].format = VK_FORMAT_R32G32B32_SFLOAT;
-    shaderInterface->inputAttribs[ 3 ].offset = 0;
-    pOffset += sizeof( float ) * 3;
-    // UV Coord
-    shaderInterface->inputAttribs[ 4 ].binding = 0;
-    shaderInterface->inputAttribs[ 4 ].location = 4;
-    shaderInterface->inputAttribs[ 4 ].format = VK_FORMAT_R32G32_SFLOAT;
-    shaderInterface->inputAttribs[ 4 ].offset = 0;
-    pOffset += sizeof( float ) * 2;
+// static int manualShaderSetup( ShaderInfo *shaderInfo, VkDevice _device ){
+//     // Set up VBO attributes
+//     ShaderInterfaceInfo *shaderInterface = &shaderInfo->shaderInputAttributes;
+//     shaderInterface->inputBinding.binding = 0;
+//     shaderInterface->inputBinding.stride = sizeof( float ) * 14;
+//     shaderInterface->inputBinding.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+//     size_t pOffset = 0;
+//     // Vertex Position
+//     shaderInterface->inputAttribs[ 0 ].binding = 0;
+//     shaderInterface->inputAttribs[ 0 ].location = 0;
+//     shaderInterface->inputAttribs[ 0 ].format = VK_FORMAT_R32G32B32_SFLOAT;
+//     shaderInterface->inputAttribs[ 0 ].offset = 0;
+//     pOffset += sizeof( float ) * 3;
+//     // Vertex Normal
+//     shaderInterface->inputAttribs[ 1 ].binding = 0;
+//     shaderInterface->inputAttribs[ 1 ].location = 1;
+//     shaderInterface->inputAttribs[ 1 ].format = VK_FORMAT_R32G32B32_SFLOAT;
+//     shaderInterface->inputAttribs[ 1 ].offset = 0;
+//     pOffset += sizeof( float ) * 3;
+//     // Vertex tangent
+//     shaderInterface->inputAttribs[ 2 ].binding = 0;
+//     shaderInterface->inputAttribs[ 2 ].location = 2;
+//     shaderInterface->inputAttribs[ 2 ].format = VK_FORMAT_R32G32B32_SFLOAT;
+//     shaderInterface->inputAttribs[ 2 ].offset = 0;
+//     pOffset += sizeof( float ) * 3;
+//     // Vertex Bitangent
+//     shaderInterface->inputAttribs[ 3 ].binding = 0;
+//     shaderInterface->inputAttribs[ 3 ].location = 3;
+//     shaderInterface->inputAttribs[ 3 ].format = VK_FORMAT_R32G32B32_SFLOAT;
+//     shaderInterface->inputAttribs[ 3 ].offset = 0;
+//     pOffset += sizeof( float ) * 3;
+//     // UV Coord
+//     shaderInterface->inputAttribs[ 4 ].binding = 0;
+//     shaderInterface->inputAttribs[ 4 ].location = 4;
+//     shaderInterface->inputAttribs[ 4 ].format = VK_FORMAT_R32G32_SFLOAT;
+//     shaderInterface->inputAttribs[ 4 ].offset = 0;
+//     pOffset += sizeof( float ) * 2;
     
-    shaderInterface->numInputs = 5;
-    shaderInterface->totalStride = pOffset;
+//     shaderInterface->numInputs = 5;
+//     shaderInterface->totalStride = pOffset;
 
-    // Set up Descriptor Set Layouts
-    VkDescriptorSetLayoutBinding cameraUboLayoutBinding = {
-        .binding = 0,
-        .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-        .descriptorCount = 1,
-        .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
-        .pImmutableSamplers = NULL
-    };
+//     // Set up Descriptor Set Layouts
+//     VkDescriptorSetLayoutBinding cameraUboLayoutBinding = {
+//         .binding = 0,
+//         .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+//         .descriptorCount = 1,
+//         .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
+//         .pImmutableSamplers = NULL
+//     };
     
-    VkDescriptorSetLayoutBinding modelUboLayoutBinding = {
-        .binding = 1,
-        .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-        .descriptorCount = 1,
-        .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
-        .pImmutableSamplers = NULL
-    };
-    //VkDescriptorSetLayoutBinding bindings[] = { cameraUboLayoutBinding, modelUboLayoutBinding };
-    VkDescriptorSetLayoutCreateInfo rgLayoutCreateInfo = {
-        .bindingCount = 1,
-        .pBindings = &cameraUboLayoutBinding,
-        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO
-    };
-    VkDescriptorSetLayoutCreateInfo modelLayoutCreateInfo = {
-        .bindingCount = 1,
-        .pBindings = &modelUboLayoutBinding,
-        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO
-    };
-    VkDescriptorSetLayout *setLayouts;
+//     VkDescriptorSetLayoutBinding modelUboLayoutBinding = {
+//         .binding = 1,
+//         .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+//         .descriptorCount = 1,
+//         .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
+//         .pImmutableSamplers = NULL
+//     };
+//     //VkDescriptorSetLayoutBinding bindings[] = { cameraUboLayoutBinding, modelUboLayoutBinding };
+//     VkDescriptorSetLayoutCreateInfo rgLayoutCreateInfo = {
+//         .bindingCount = 1,
+//         .pBindings = &cameraUboLayoutBinding,
+//         .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO
+//     };
+//     VkDescriptorSetLayoutCreateInfo modelLayoutCreateInfo = {
+//         .bindingCount = 1,
+//         .pBindings = &modelUboLayoutBinding,
+//         .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO
+//     };
+//     VkDescriptorSetLayout *setLayouts;
 
-    setLayouts = (VkDescriptorSetLayout*) malloc( sizeof( VkDescriptorSetLayout ) * 2 );
-    if( vkCreateDescriptorSetLayout( _device, &rgLayoutCreateInfo, NULL, setLayouts ) !=
-            VK_SUCCESS ){
-        LOG( "Failed to create shader layout create info" );
-        return 1;
-    }
-    if( vkCreateDescriptorSetLayout( _device, &modelLayoutCreateInfo, NULL, &setLayouts[ 1 ] ) !=
-            VK_SUCCESS ){
-        LOG( "Failed to create shader layout create info" );
-        return 1;
-    }
-    shaderInterface->descriptorSetLayoutCtx.numLayouts = 2;
-    shaderInterface->descriptorSetLayoutCtx.numRenderGroupLocalLayouts = 1;
-    shaderInterface->descriptorSetLayoutCtx.numModelLocalLayouts = 1;
-    shaderInterface->descriptorSetLayoutCtx.renderGroupSetLayouts = setLayouts;
-    shaderInterface->descriptorSetLayoutCtx.modelSetLayouts = &setLayouts[ 1 ];
-    shaderInfo->shaderInputAttributes.descriptorSetLayoutCtx.layouts = setLayouts;
+//     setLayouts = (VkDescriptorSetLayout*) malloc( sizeof( VkDescriptorSetLayout ) * 2 );
+//     if( vkCreateDescriptorSetLayout( _device, &rgLayoutCreateInfo, NULL, setLayouts ) !=
+//             VK_SUCCESS ){
+//         LOG( "Failed to create shader layout create info" );
+//         return 1;
+//     }
+//     if( vkCreateDescriptorSetLayout( _device, &modelLayoutCreateInfo, NULL, &setLayouts[ 1 ] ) !=
+//             VK_SUCCESS ){
+//         LOG( "Failed to create shader layout create info" );
+//         return 1;
+//     }
+//     shaderInterface->descriptorSetLayoutCtx.numLayouts = 2;
+//     shaderInterface->descriptorSetLayoutCtx.numRenderGroupLocalLayouts = 1;
+//     shaderInterface->descriptorSetLayoutCtx.numModelLocalLayouts = 1;
+//     shaderInterface->descriptorSetLayoutCtx.renderGroupSetLayouts = setLayouts;
+//     shaderInterface->descriptorSetLayoutCtx.modelSetLayouts = &setLayouts[ 1 ];
+//     shaderInfo->shaderInputAttributes.descriptorSetLayoutCtx.layouts = setLayouts;
 
-    return 0;
+//     return 0;
 
 
-}
+// }
 
 static void keyEvent( GLFWwindow* UNUSED(window), int key, int UNUSED(scancode), int action, int UNUSED(mods) ){
     BaseType xT = 0.0f, yT = 0.0f, zT = 0.0f;

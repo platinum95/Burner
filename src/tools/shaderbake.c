@@ -75,7 +75,7 @@ int main( int argc, char * argv[] ){
 
     size_t expectedSize = sizeof( PomShaderFormat ) + dataBlockSize;
     void *dataBlock = (void*) format.shaderNameOffset;
-    if( pomShaderFormatWrite( outputPath, &format, dataBlock ) != 
+    if( pomShaderFormatWrite( outputPath, &format, dataBlock ) !=
             expectedSize ){
         LOG( ERR, "Did not write expected number of bytes to output file" );
         toRet = 1;
@@ -370,43 +370,43 @@ static int _parseAttributeLine( char *_attrLine, PomShaderAttributeInfo *_attrIn
 }
 
 static PomShaderDataTypes _parseDescriptorType( const char * _typeStr, size_t _typeLen ){
-    if( strlen( "VK_DESCRIPTOR_TYPE_SAMPLER" ) == _typeLen && !strncmp( "VK_DESCRIPTOR_TYPE_SAMPLER", _typeStr, _typeLen ) ){
+    if( strlen( "SAMPLER" ) == _typeLen && !strncmp( "SAMPLER", _typeStr, _typeLen ) ){
         return VK_DESCRIPTOR_TYPE_SAMPLER;
     }
-    if( strlen( "VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER" ) == _typeLen && !strncmp( "VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER", _typeStr, _typeLen ) ){
+    if( strlen( "COMBINED_IMAGE_SAMPLER" ) == _typeLen && !strncmp( "COMBINED_IMAGE_SAMPLER", _typeStr, _typeLen ) ){
         return VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
     }
-    if( strlen( "VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE" ) == _typeLen && !strncmp( "VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE", _typeStr, _typeLen ) ){
+    if( strlen( "SAMPLED_IMAGE" ) == _typeLen && !strncmp( "SAMPLED_IMAGE", _typeStr, _typeLen ) ){
         return VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
     }
-    if( strlen( "VK_DESCRIPTOR_TYPE_STORAGE_IMAGE" ) == _typeLen && !strncmp( "VK_DESCRIPTOR_TYPE_STORAGE_IMAGE", _typeStr, _typeLen ) ){
+    if( strlen( "STORAGE_IMAGE" ) == _typeLen && !strncmp( "STORAGE_IMAGE", _typeStr, _typeLen ) ){
         return VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
     }
-    if( strlen( "VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER" ) == _typeLen && !strncmp( "VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER", _typeStr, _typeLen ) ){
+    if( strlen( "UNIFORM_TEXEL_BUFFER" ) == _typeLen && !strncmp( "UNIFORM_TEXEL_BUFFER", _typeStr, _typeLen ) ){
         return VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER;
     }
-    if( strlen( "VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER" ) == _typeLen && !strncmp( "VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER", _typeStr, _typeLen ) ){
+    if( strlen( "STORAGE_TEXEL_BUFFER" ) == _typeLen && !strncmp( "STORAGE_TEXEL_BUFFER", _typeStr, _typeLen ) ){
         return VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER;
     }
-    if( strlen( "VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER" ) == _typeLen && !strncmp( "VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER", _typeStr, _typeLen ) ){
+    if( strlen( "UNIFORM_BUFFER" ) == _typeLen && !strncmp( "UNIFORM_BUFFER", _typeStr, _typeLen ) ){
         return VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
     }
-    if( strlen( "VK_DESCRIPTOR_TYPE_STORAGE_BUFFER" ) == _typeLen && !strncmp( "VK_DESCRIPTOR_TYPE_STORAGE_BUFFER", _typeStr, _typeLen ) ){
+    if( strlen( "STORAGE_BUFFER" ) == _typeLen && !strncmp( "STORAGE_BUFFER", _typeStr, _typeLen ) ){
         return VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
     }
-    if( strlen( "VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC" ) == _typeLen && !strncmp( "VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC", _typeStr, _typeLen ) ){
+    if( strlen( "UNIFORM_BUFFER_DYNAMIC" ) == _typeLen && !strncmp( "UNIFORM_BUFFER_DYNAMIC", _typeStr, _typeLen ) ){
         return VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
     }
-    if( strlen( "VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC" ) == _typeLen && !strncmp( "VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC", _typeStr, _typeLen ) ){
+    if( strlen( "STORAGE_BUFFER_DYNAMIC" ) == _typeLen && !strncmp( "STORAGE_BUFFER_DYNAMIC", _typeStr, _typeLen ) ){
         return VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC;
     }
-    if( strlen( "VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT" ) == _typeLen && !strncmp( "VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT", _typeStr, _typeLen ) ){
+    if( strlen( "INPUT_ATTACHMENT" ) == _typeLen && !strncmp( "INPUT_ATTACHMENT", _typeStr, _typeLen ) ){
         return VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT;
     }
-    if( strlen( "VK_DESCRIPTOR_TYPE_INLINE_UNIFORM_BLOCK_EXT" ) == _typeLen && !strncmp( "VK_DESCRIPTOR_TYPE_INLINE_UNIFORM_BLOCK_EXT", _typeStr, _typeLen ) ){
+    if( strlen( "INLINE_UNIFORM_BLOCK_EXT" ) == _typeLen && !strncmp( "INLINE_UNIFORM_BLOCK_EXT", _typeStr, _typeLen ) ){
         return VK_DESCRIPTOR_TYPE_INLINE_UNIFORM_BLOCK_EXT;
     }
-    if( strlen( "VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_NV" ) == _typeLen && !strncmp( "VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_NV", _typeStr, _typeLen ) ){
+    if( strlen( "ACCELERATION_STRUCTURE_NV" ) == _typeLen && !strncmp( "ACCELERATION_STRUCTURE_NV", _typeStr, _typeLen ) ){
         return VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_NV;
     }
 
@@ -450,7 +450,7 @@ static int _parseDescriptorLine( char *_descLine, PomShaderDescriptorInfo *_desc
     }
     
     char *setStart = typeStart;
-    if( _findNextParameter( &typeStart, &typeLen ) ){
+    if( _findNextParameter( &setStart, &typeLen ) ){
         LOG( WARN, "Failed to find set in attribute declaration" );
         return 2;
     }
@@ -572,7 +572,7 @@ static int parseShaderInterface( char *_shaderSource, size_t _sourceLength,
         int parseDescRet = _parseDescriptorLine( currLine, nextDescInfo );
         if( parseDescRet == 0 ){
             LOG( DEBUG, "Adding descriptor info for %s", nextDescInfo->nameOffset );
-            pomLinkedListAdd( &attrInfoList, (PllKeyType) nextDescInfo );
+            pomLinkedListAdd( &descInfoList, (PllKeyType) nextDescInfo );
             nextDescInfo = (PomShaderDescriptorInfo*) calloc( 1, sizeof( PomShaderDescriptorInfo ) );
         } else if( parseDescRet == 2 ){
             LOG( WARN, "Mangled descriptor declaration" );

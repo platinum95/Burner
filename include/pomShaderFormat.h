@@ -30,7 +30,7 @@ typedef enum PomShaderDataTypes{
 struct PomShaderAttributeInfo{
     char *nameOffset;
     PomShaderDataTypes dataType;
-    size_t sizeBytes;
+    //size_t sizeBytes;
     uint32_t location;
 };
 
@@ -49,6 +49,7 @@ struct PomShaderFormat{
     uint64_t numAttributeInfo; //4
     PomShaderAttributeInfo *attributeInfoOffset; //8
 
+    // TODO - consider splitting this into model/rendergroup/program-local descriptors
     uint64_t numDescriptorInfo; //4
     PomShaderDescriptorInfo *descriptorInfoOffset; //8
 
