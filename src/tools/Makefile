@@ -13,6 +13,9 @@ SHADERBAKE_LIBS  = -lshaderc_shared
 SHADERBAKE_DEPS  = $(CMORE_STATIC_LIB) $(OBJ_DIR)/pomShaderFormat.o
 SHADERBAKE_BIN   = $(CALLER_DIR)/shaderbake
 
+ALL_OBJ = $(SHADERBAKE_OBJ) $(MODELBAKE_OBJ)
+DEPS = $(patsubst %.o,%.d,$(ALL_OBJ))
+
 all: $(MODELBAKE_BIN) $(SHADERBAKE_BIN)
 
 $(MODELBAKE_BIN): $(MODELBAKE_OBJ)
@@ -24,6 +27,7 @@ $(SHADERBAKE_BIN): $(SHADERBAKE_OBJ)
 $(OBJ_DIR)/%.o: $(TOOL_SRC_DIR)/%.c
 	$(CC) -c -o $@ $< $(CFLAGS)
 
+-include $(DEPS)
 
 clean:
 	rm -f $(MODELBAKE_BIN) $(SHADERBAKE_BIN)

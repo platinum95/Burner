@@ -1,7 +1,7 @@
 CC          = gcc
 GLSLC       = glslc
 INCLUDES    = -I$(PWD)/include -I$(PWD)/CMore/
-CFLAGS      = $(INCLUDES) -O0 -Wall -Werror -Wextra -Wformat=2 -Wshadow -pedantic -g -Werror=vla -march=native
+CFLAGS      = $(INCLUDES) -MMD -O0 -Wall -Werror -Wextra -Wformat=2 -Wshadow -pedantic -g -Werror=vla -march=native
 LIBS        = -lm -lpthread -lvulkan -lglfw
 MODELBAKE   = ./modelbake
 SHADERBAKE  = ./shaderbake
@@ -10,6 +10,7 @@ DEFINES     = -DBURNER_VERSION_MAJOR=0 -DBURNER_VERSION_MINOR=0 -DBURNER_VERSION
 DEFINES    := -DBURNER_NAME="Burner"
 
 ROOT_DIR        = $(CURDIR)
+INCLUDE_DIR 	= $(ROOT_DIR)/include
 SRC_DIR         = $(ROOT_DIR)/src
 OBJ_DIR         = $(ROOT_DIR)/obj
 TESTS_DIR       = $(ROOT_DIR)/src/tests
@@ -40,11 +41,13 @@ OBJ         = $(patsubst $(SRC_DIR)/%.c,$(OBJ_DIR)/%.o,$(SRC))
 BURNER_OBJ  = $(patsubst $(SRC_DIR)/%.c,$(OBJ_DIR)/%.o,$(BURNER_SRC))
 TESTS_OBJ   = $(patsubst $(TESTS_DIR)/%.c,$(OBJ_DIR)/%.o,$(TESTS_SRC))
 TEST_OBJ    = $(patsubst $(TESTS_DIR)/%.c,$(OBJ_DIR)/%.o,$(TEST_SRC))
-SHADERS_OBJ = $(patsubst $(SHADER_SRC_DIR)/%,$(SHADER_OBJ_DIR)/%.spv,$(ALL_SHADERS))
+SHADERS_OBJ = $(patsubst $(SHADER_SRC_DIR)/%,$(SHADER_OBJ_DIR)/%.psf,$(ALL_SHADERS))
 BAKED_MODELS= $(patsubst $(RAW_MODELS_DIR)/%.obj,$(BAKED_MODELS_DIR)/%.pomf,$(ALL_MODELS))
 BAKED_MODELS := $(patsubst %.obj,$(BAKED_MODELS_DIR)/%.pomf,$(notdir $(ALL_MODELS)))
 
 CMORE_STATIC_LIB = $(ROOT_DIR)/cmore.a
+
+DEP := $(patsubst $(OBJ_DIR)/%.o,$(OBJ_DIR)/%.d,$(OBJ))
 
 export CMORE_STATIC_LIB
 export CFLAGS
@@ -77,11 +80,13 @@ $(OBJ_DIR)/%.o: $(SRC_DIR)/%.c
 $(OBJ_DIR)/%.o: $(TESTS_DIR)/%.c
 	$(CC) -c -o $@ $< $(CFLAGS)
 
-$(SHADER_OBJ_DIR)/%.spv: $(SHADER_SRC_DIR)/%
-	$(GLSLC)  $< -o $@
+$(SHADER_OBJ_DIR)/%.psf: $(SHADER_SRC_DIR)/% | $(SHADERBAKE)
+	$(SHADERBAKE)  $< $@
 
 $(BAKED_MODELS_DIR)/%.pomf: | tools
 	$(MODELBAKE) $(RAW_MODELS_DIR)/$(basename $(notdir $@))/$(basename $(notdir $@)).obj $@
+
+-include $(DEP)
 
 .PHONY: clean
 clean:
