@@ -247,7 +247,7 @@ int pomVkRenderGroupRecord( PomVkRenderGroupCtx *_renderGroupCtx, VkCommandBuffe
         vkCmdBindVertexBuffers( _cmdBuffer, 0, 1, &model->modelBuffer.buffer, offsets );
         vkCmdBindIndexBuffer( _cmdBuffer, model->modelBuffer.buffer, 0, VK_INDEX_TYPE_UINT32 );
 
-        vkCmdDraw( _cmdBuffer, model->modelMeshInfo->numVertices, 1, 0, 0);
+        vkCmdDrawIndexed( _cmdBuffer, model->modelMeshInfo->numIndices, 1, 0, 0, 0 );
     }
 
     return 0;
